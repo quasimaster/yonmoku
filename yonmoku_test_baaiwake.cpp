@@ -14,8 +14,8 @@
 
 using namespace std;
 
-//mt19937 rng(random_device{}());
-mt19937 rng;
+mt19937 rng(random_device{}());
+//mt19937 rng;
 enum Cell{None, Me, You};
 enum State{Continue, End, Invalid};
 enum Color{Draw, Black, White};
