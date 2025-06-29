@@ -292,6 +292,14 @@ struct Board
 	{
 		return ((Me | You) << SIZE * SIZE | ((1uLL << SIZE * SIZE) - 1)) & ~(Me | You);
 	}
+
+	Board place_fast_clone(unsigned long long bit) const
+	{
+		Board b = *this;
+		b.Me |= bit;
+		swap(b.Me, b.You);
+		return b;
+	}
 };
 
 struct Player
@@ -578,8 +586,8 @@ struct AIPlayer : Player
                 while (h)
                 {
                     const unsigned long long bit = h & -h;
-                    Board b = board;
-                    enum State r = b.place_fast(bit);
+                    Board b = board.place_fast_clone(bit);
+		    enum State r = Board::win(b.You);
                     assert(r == State::Continue);
                     int ev = -evaluate_board(b, 3 , -INF , INF);
                     dynamic.push_back(make_pair(ev, bit));
@@ -592,8 +600,8 @@ struct AIPlayer : Player
             {
                 {
                     const unsigned long long bit = dynamic[i].second;
-                    Board b = board;
-                    enum State r = b.place_fast(bit);
+                    Board b = board.place_fast_clone(bit);
+		    enum State r = Board::win(b.You);
                     assert(r == State::Continue);
                     int ev = -evaluate_board(b, level - 1, -beta, -alpha);
                     alpha = max(alpha, ev);
@@ -612,8 +620,8 @@ struct AIPlayer : Player
                 {
                     const unsigned long long bit = h & -h;
                     //const unsigned long long bit = dynamic[i].second;
-                    Board b = board;
-                    enum State r = b.place_fast(bit);
+                    Board b = board.place_fast_clone(bit);
+		    enum State r = Board::win(b.You);
                     assert(r == State::Continue);
                     int ev = -evaluate_board(b, level - 1, -beta, -alpha);
                     alpha = max(alpha, ev);
@@ -660,8 +668,8 @@ struct AIPlayer : Player
 			while (h)
 			{
 				const unsigned long long bit = h & -h;
-				Board b = board;
-				enum State r = b.place_fast(bit);
+				Board b = board.place_fast_clone(bit);
+				enum State r = Board::win(b.You);
 				assert(r == State::Continue);
 				int ev = -evaluate_board(b, 3 , -INF , INF);
 				//if (mx < ev) mv = 0uLL, mx = ev;
@@ -683,8 +691,8 @@ struct AIPlayer : Player
 			{
 				//const unsigned long long bit = h & -h;
                 const unsigned long long bit = dynamic[i].second;
-				Board b = board;
-				enum State r = b.place_fast(bit);
+				Board b = board.place_fast_clone(bit);
+				enum State r = Board::win(b.You);
 				assert(r == State::Continue);//下の行について、?nはn+1手読みturn>=45?19:turn>=43?15:turn>=41?13:turn>=39?11:turn>=33?9
 				//int ev = -evaluate_board(b,turn>=46?14:turn>=39?9:level - 1, -INF , -mx + 1);
 				//int ev = -evaluate_board(b,turn>=44?16::level - 1, -INF , -mx + 1);//教師データ用ver3
