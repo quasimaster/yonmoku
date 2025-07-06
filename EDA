@@ -1,0 +1,180 @@
+#include<iostream>
+#include<string>
+#include<fstream>
+#include<sstream>
+
+using namespace std;
+
+int fir_eva[200000][32] = {};
+int sec_eva[200000][32] = {};
+int rec[200000][64] = {};
+
+const int INF = 1e9;
+
+int num = 0;
+
+class ImportData{
+    public:
+        // int fir_eva[50000][32] = {};
+        // int sec_eva[50000][32] = {};
+        // int rec[50000][64] = {};
+
+    string firstName;
+    string secondName;
+    string recordName;
+
+    public:
+        ImportData(){
+
+        }
+        ImportData(string firstName, string secondName, string recordName){
+            this->firstName = firstName;
+            this->secondName = secondName;
+            this->recordName = recordName;
+        }
+        void importFirst(){
+            std::string input_first_evaluate = firstName;
+            std::ifstream ifs_first_evaluate (input_first_evaluate);
+            std::string str_buf;
+
+            int t = 1;
+            while(getline(ifs_first_evaluate, str_buf))
+            {
+                std::istringstream i_stream(str_buf);
+                int ev;
+                int i = 0;
+                while(i_stream >> ev)
+                {
+                    // cout<< "\"" << ev << "\", ";
+                    fir_eva[t][i] = ev;
+                    i++;
+                    i_stream.ignore();
+                }
+                t++;
+                num++;
+            }
+        }
+        void importSecond(){
+            std::string input_second_evaluate = secondName;
+            std::ifstream ifs_second_evaluate (input_second_evaluate);
+            std::string str_buf;
+
+            int t = 1;
+            while(getline(ifs_second_evaluate, str_buf))
+            {
+                std::istringstream i_stream(str_buf);
+                int ev;
+                int i = 0;
+                while(i_stream >> ev)
+                {
+                    //cout<< "\"" << ev << "\", ";
+                    sec_eva[t][i] = ev;
+                    i++;
+                    i_stream.ignore();
+                }
+                t++;
+            }
+        }
+        void importRecord(){
+            std::string input_record = recordName;
+            std::ifstream ifs_record (input_record);
+            std::string str_buf;
+
+            int t = 1;
+            while(getline(ifs_record, str_buf))
+            {
+                std::istringstream i_stream(str_buf);
+                int ev;
+                int i = 0;
+                while(i_stream >> ev)
+                {
+                    //cout<< "\"" << ev << "\", ";
+                    rec[t][i] = ev;
+                    i++;
+                    i_stream.ignore();
+                }
+                t++;
+            }
+        }
+
+};
+
+class Info{
+    public:
+        int endTurn[65] = {};
+        int sameGame = 0;
+
+        void getEndTurn(){
+            for(int t = 1; t <= num; t++){
+                for(int i = 0; i < 64; i++){
+                    if(rec[t][i] == INF){
+                        endTurn[i]++;
+                        break;
+                    }
+                    else if(i == 63){
+                        endTurn[64]++;
+                    }
+                }
+            }
+        }
+        void countSameGame(){
+            int flag = false;
+            for(int t = 2; t <= num; t++){
+                flag = false;
+                for(int k = 1; k < t; k++){
+                    for(int i = 0; i < 64; i++){
+                        if(rec[t][i] != rec[k][i]){
+                            break;
+                        }
+                        if(i == 63){
+                            sameGame++;
+                            flag = true;
+                            cout << "k = " << k << "t = " << t << endl;
+                        }
+                    }
+                    if(flag == true){
+                        break;
+                    }
+                }
+            }
+            cout << sameGame << endl;
+        }
+};
+
+class OutputData : public Info{
+    public:
+        void outputEndTurn(){
+            std::string outputFile = "/yonmoku/EDA.csv";
+            std::ofstream ofs_outputFile(outputFile);
+
+            Info::getEndTurn();
+
+            for(int i = 0; i < 65; i++){
+                ofs_outputFile << i << ",";
+            }
+            ofs_outputFile << endl;
+            for(int i = 0; i < 65; i++){
+                ofs_outputFile << Info::endTurn[i] << ",";
+            }
+        }
+};
+
+int main(){
+    string firstName = "/yonmoku/first_evaluate_ver5.csv";
+    string secondName = "/yonmoku/second_evaluate_ver5.csv";
+    string recordName = "/yonmoku/record_ver5.csv";
+
+    ImportData data = ImportData(firstName, secondName, recordName);
+    data.importFirst();
+    data.importSecond();
+    data.importRecord();
+
+    Info info = Info();
+    
+
+    OutputData output = OutputData();
+    output.outputEndTurn();
+
+    info.countSameGame();
+    return 0;
+};
