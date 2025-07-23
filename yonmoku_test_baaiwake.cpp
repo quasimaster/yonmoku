@@ -910,30 +910,27 @@ int main()
 	{
 		const int turn = board.turn();// turn number (the number of stones = turn - 1)
 		int sum = 0;
-		static const int width = 10;//区間の幅の値
+		// static const int width = 10;//区間の幅の値
 		if(turn <= 59)
 		{
 		    //static const int weight[9] = {0,-6,-44,-10,0,10,6,3,0};//first
-			static const int stdweight[54] = {
-                0,-84,-48,-26,0,13,32,880,0,
-                0,-203,-56,-26,0,18,38,236,0,
-                0,-118,-67,-25,0,19,57,167,0,
-                0,-76,-67,-25,0,14,68,49,0,
-                0,-24,-72,-26,0,-31,32,-12,0,
-				0,0,0,0,0,0,0,0,0
+			static const int stdweight[36] = {
+                0,-132,-56,-21,0,18,49,444,0,
+                0,-216,-75,-22,0,20,75,70,0,
+                0,-121,-81,4,0,31,59,66,0,
+                0,-1,-78,-26,0,15,35,102,0
             };
 		    auto count = board.count();
             //for (int v : count) sum += weight[v + 4];
-            for (int v : count) sum += stdweight[((turn - 4) / width)*9 + v + 4];//0~4,5~14,...,45~54 
+			const int turn_bucket = (turn - 4) / 14;
+            for (int v : count) sum += stdweight[turn_bucket * 9 + v + 4];//0~4,5~14,...,45~54 
 			//1~7,8~16,17~25,26~34,35~43,44~52,53~61
 
-            static const int maketweight[48] = {
-                -634,69,60,29,313,-59,-13,-37,
-                175,15,39,25,80,-2,24,-6,
-                255,9,41,15,3,13,19,-5,
-                412,-9,95,30,34,45,54,29,
-                554,-99,168,64,262,-36,60,-39,
-				0,0,0,0,0,0,0,0
+            static const int maketweight[32] = {
+                53,22,37,21,12,-45,2,-19,
+                156,-14,63,28,79,-66,24,-4,
+                389,26,134,82,123,20,63,52,
+                819,-84,197,90,265,71,91,74
             };
 
             for(int i = 0; i < LINES_NUM; i++)
@@ -960,19 +957,19 @@ int main()
 					{
 						unsigned long long h = floatthree & -floatthree;
 						unsigned long long make = two & ~h;//makeT点						
-                    	sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_1) * maketweight[((turn - 4) / width)*8 + 0];
-						sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_2) * maketweight[((turn - 4) / width)*8 + 1];
-						sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_3) * maketweight[((turn - 4) / width)*8 + 2];
-						sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_4) * maketweight[((turn - 4) / width)*8 + 3];
+                    	sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket * 8 + 0];
+						sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket * 8 + 1];
+						sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_3) * maketweight[turn_bucket * 8 + 2];
+						sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_4) * maketweight[turn_bucket * 8 + 3];
 						floatthree ^= h;
 						if(floatthree)
 						{
 							//unsigned long long h = floatthree & -floatthree;
 							unsigned long long make = two & ~floatthree;//makeT点						
-							sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_1) * maketweight[((turn - 4) / width)*8 + 0];
-							sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_2) * maketweight[((turn - 4) / width)*8 + 1];
-							sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_3) * maketweight[((turn - 4) / width)*8 + 2];
-							sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_4) * maketweight[((turn - 4) / width)*8 + 3];
+							sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket * 8 + 0];
+							sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket * 8 + 1];
+							sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_3) * maketweight[turn_bucket * 8 + 2];
+							sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_4) * maketweight[turn_bucket * 8 + 3];
 							//floatthree ^= h;
 						}
 					}
@@ -1000,19 +997,19 @@ int main()
 					{
 						unsigned long long h = floatthree & -floatthree;
 						unsigned long long make = two & ~h;
-						sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_1) * maketweight[((turn - 4) / width)*8 + 4];
-						sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_2) * maketweight[((turn - 4) / width)*8 + 5];
-						sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_3) * maketweight[((turn - 4) / width)*8 + 6];
-						sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_4) * maketweight[((turn - 4) / width)*8 + 7];
+						sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket * 8 + 4];
+						sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket * 8 + 5];
+						sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_3) * maketweight[turn_bucket * 8 + 6];
+						sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_4) * maketweight[turn_bucket * 8 + 7];
 						floatthree ^= h;
 						if(floatthree)
 						{
 							//unsigned long long h = floatthree & -floatthree;
 							unsigned long long make = two & ~floatthree;
-							sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_1) * maketweight[((turn - 4) / width)*8 + 4];
-							sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_2) * maketweight[((turn - 4) / width)*8 + 5];
-							sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_3) * maketweight[((turn - 4) / width)*8 + 6];
-							sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_4) * maketweight[((turn - 4) / width)*8 + 7];
+							sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket * 8 + 4];
+							sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket * 8 + 5];
+							sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_3) * maketweight[turn_bucket * 8 + 6];
+							sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_4) * maketweight[turn_bucket * 8 + 7];
 							//floatthree ^= h;
 						}
 					}
@@ -1029,19 +1026,20 @@ int main()
 		if(turn <= 59)
 		{
 		    static const int weight[36] = {
-				0,-118,-38,-6,0,23,37,-298,0,
-				0,-198,-42,-15,0,26,66,95,0,
-				0,-37,-47,-5,0,19,78,11,0,
-				0,117,-12,50,0,35,110,145,0
+				0,-111,-30,-8,0,28,45,323,0,
+				0,-246,-65,-12,0,33,97,117,0,
+				0,-61,-34,-5,0,14,95,94,0,
+				0,50,-18,12,0,41,106,97,0
 			};
 			
 		    auto count = board.count();
-            for (int v : count) sum += weight[((turn - 5) / 14)*9 + v + 4];//1~3,4~13,...,44~53
+			const int turn_bucket = (turn - 5) / 14;
+            for (int v : count) sum += weight[turn_bucket * 9 + v + 4];//1~3,4~13,...,44~53
 			static const int maketweight[32] = {
-				93,-7,15,-18,102,38,26,12,
-				49,0,17,-2,121,-7,35,30,
-				99,39,50,13,330,-10,104,39,
-				297,-126,44,-88,853,-101,180,126
+				19,-31,19,-5,100,69,44,34,
+				52,-51,25,-1,113,6,64,38,
+				137,-15,69,40,408,12,155,106,
+				130,-16,76,48,887,-74,198,107
 			};
 
             for(int i = 0; i < LINES_NUM; i++)
@@ -1058,10 +1056,10 @@ int main()
 					{
 						unsigned long long h = floatthree & -floatthree;
 						unsigned long long make = two & ~h;//makeT点						
-                    	sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_1) * maketweight[((turn - 5) / 14)*8 + 0];
-						sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_2) * maketweight[((turn - 5) / 14)*8 + 1];
-						sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_3) * maketweight[((turn - 5) / 14)*8 + 2];
-						sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_4) * maketweight[((turn - 5) / 14)*8 + 3];
+                    	sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket * 8 + 0];
+						sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket * 8 + 1];
+						sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_3) * maketweight[turn_bucket * 8 + 2];
+						sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_4) * maketweight[turn_bucket * 8 + 3];
 						floatthree ^= h;
 					}
                 }
@@ -1077,10 +1075,10 @@ int main()
 					{
 						unsigned long long h = floatthree & -floatthree;
 						unsigned long long make = two & ~h;
-						sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_1) * maketweight[((turn - 5) / 14)*8 + 4];
-						sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_2) * maketweight[((turn - 5) / 14)*8 + 5];
-						sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_3) * maketweight[((turn - 5) / 14)*8 + 6];
-						sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_4) * maketweight[((turn - 5) / 14)*8 + 7];
+						sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket * 8 + 4];
+						sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket * 8 + 5];
+						sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_3) * maketweight[turn_bucket * 8 + 6];
+						sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_4) * maketweight[turn_bucket * 8 + 7];
 						floatthree ^= h;
 					}
                 }
@@ -1097,15 +1095,15 @@ int main()
 	{
 		const int turn = board.turn();// turn number (the number of stones = turn - 1)
 		rMe &= ~(rYou << SIZE * SIZE);
-		static const int parameter[6] = {599,913,642,651,535,0};
+		static const int parameter[4] = {1252,1116,790,512};
 		//assert(turn < 64);
-		return __builtin_popcountll(rMe & rMe << SIZE * SIZE) * parameter[(turn - 4) / 10];
+		return __builtin_popcountll(rMe & rMe << SIZE * SIZE) * parameter[(turn - 4) / 14];
 	};
 	auto continuous_sec = [](const Board &board, unsigned long long rMe, const unsigned long long rYou) -> int
 	{
 		const int turn = board.turn();// turn number (the number of stones = turn - 1)
 		rMe &= ~(rYou << SIZE * SIZE);
-		static const int parameter[4] = {1302,500,753,1072};
+		static const int parameter[4] = {1308,1154,940,1035};
 		return __builtin_popcountll(rMe & rMe << SIZE * SIZE) * parameter[(turn - 5) / 14];
 	};
 	auto reach_layer_intersection = [&](const Board &board, const enum Color now, unsigned long long rMe, unsigned long long rYou, const unsigned long long hand) -> int
@@ -1125,19 +1123,17 @@ int main()
 		rMe ^= intersection_3;
 		rYou ^= intersection_3;
 
-        static const int weightfir[60] = {
-			-733,-143,-789,145,-223,107,497,314,-113,0,
-            -124,290,-176,45,-20,-12,314,-487,-745,0,
-            -37,401,-98,201,133,125,188,63,-18,	0,
-            111,727,82,255,427,144,440,-69,877,0,
-        	153,1298,89,230,940,260,1049,399,1442,0,
-			0,0,0,0,0,0,0,0,0,0
+        static const int weightfir[40] = {
+			-295,-1,-365,103,-16,18,-393,943,326,-697,
+            127,538,77,25,66,-33,544,-209,-47,-175,
+            113,749,62,190,501,154,458,352,952,-407,
+            34,1167,45,502,1041,362,696,834,845,412
         };
         static const int weightsec[40] = {
-            571,410,418,-38,274,-92,-253,12,813,0,
-            196,109,98,-59,274,-111,116,351,-446,0,
-            271,619,202,111,786,50,508,259,860,0,
-            131,997,201,369,1651,247,1540,-146,2331,0
+            -132,-182,-164,24,387,-40,363,-555,567,355,
+            184,227,90,-52,360,-93,228,278,-439,-601,
+            182,573,163,135,854,68,535,433,1055,649,
+            331,931,244,257,1440,222,1086,199,1747,911
         };
 
 		int sum = 0;
@@ -1146,14 +1142,14 @@ int main()
 			if (now == Color::Black)
             {//first (black) player
                 {//Me, first (black) player
-                    sum += __builtin_popcountll(rMe & mask_2) * weightfir[((turn - 4) / 10)*10 + 0];//2nd layer_intersection_fir
-                    sum += __builtin_popcountll(rMe & mask_3) * weightfir[((turn - 4) / 10)*10 + 1];//3rd layer_intersection_fir
-                    sum += __builtin_popcountll(rMe & mask_4) * weightfir[((turn - 4) / 10)*10 + 2];//4th layer_intersection_fir
+                    sum += __builtin_popcountll(rMe & mask_2) * weightfir[((turn - 4) / 14)*10 + 0];//2nd layer_intersection_fir
+                    sum += __builtin_popcountll(rMe & mask_3) * weightfir[((turn - 4) / 14)*10 + 1];//3rd layer_intersection_fir
+                    sum += __builtin_popcountll(rMe & mask_4) * weightfir[((turn - 4) / 14)*10 + 2];//4th layer_intersection_fir
                 }
                 {//You, second (white) player
-                    sum -= __builtin_popcountll(rYou & mask_2) * weightfir[((turn - 4) / 10)*10 + 3];//2nd layer_intersection_fir
-                    sum -= __builtin_popcountll(rYou & mask_3) * weightfir[((turn - 4) / 10)*10 + 4];//3rd layer_intersection_fir
-                    sum -= __builtin_popcountll(rYou & mask_4) * weightfir[((turn - 4) / 10)*10 + 5];//4th layer_intersection_fir
+                    sum -= __builtin_popcountll(rYou & mask_2) * weightfir[((turn - 4) / 14)*10 + 3];//2nd layer_intersection_fir
+                    sum -= __builtin_popcountll(rYou & mask_3) * weightfir[((turn - 4) / 14)*10 + 4];//3rd layer_intersection_fir
+                    sum -= __builtin_popcountll(rYou & mask_4) * weightfir[((turn - 4) / 14)*10 + 5];//4th layer_intersection_fir
                 }
                 if (intersection_3)
                 {//if there exists intersections of reaches on 3rd layer
@@ -1162,16 +1158,16 @@ int main()
                     //if (__builtin_parityll(intersection_3))
                     if(intersection == 1)
                     {//odd, black = Me
-                        sum += weightfir[((turn - 4) / 10)*10 + 6];
+                        sum += weightfir[((turn - 4) / 14)*10 + 6];
                     }
                     else if(intersection == 2)
                     {//even, white = You
-                        sum -= weightfir[((turn - 4) / 10)*10 + 7];
+                        sum -= weightfir[((turn - 4) / 14)*10 + 7];
                     }
                     else if(intersection == 3)
-                    sum += weightfir[((turn - 4) / 10)*10 + 8];
+                    sum += weightfir[((turn - 4) / 14)*10 + 8];
 					else if(intersection == 4)
-					sum -= weightfir[((turn - 4) / 10)*10 + 9];
+					sum -= weightfir[((turn - 4) / 14)*10 + 9];
                 }
             }
             else
