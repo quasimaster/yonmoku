@@ -11,11 +11,15 @@
 #include<string>
 #include<fstream>
 #include<sstream>
+# include <stdio.h>
+# include <omp.h> 
 
 using namespace std;
 
+int rng_thread_num = 0;
 mt19937 rng(random_device{}());
-//mt19937 rng;
+// mt19937 rng;
+// mt19937 rng(rng_thread_num);
 enum Cell{None, Me, You};
 enum State{Continue, End, Invalid};
 enum Color{Draw, Black, White};
@@ -52,8 +56,7 @@ static const unsigned long long move_order[] = {
 	0x0000000000006ff6uLL,// last
 };
 
-int game_count = -1;
-static const int sparse = 1;
+//static const int sparse = 1;
 struct Board
 {
 	unsigned long long Me, You;
@@ -221,31 +224,25 @@ struct Board
 		unsigned long long black, white;
 		if (now == Color::Black) black = Me, white = You;
 		else black = You, white = Me;
-		if(game_count % sparse == 0)
 		cout << "    z=1  z=2  z=3  z=4\n";
 		for (int y = SIZE - 1; y >= 0; y--)
 		{
-			if(game_count % sparse == 0)
 			cout << "y=" << y + 1 << " ";
 			for (int z = 0; z < SIZE; z++)
 			{
 				for (int x = 0; x < SIZE; x++)
 				{
 					const unsigned long long bit = BIT(x, y, z);
-					if(game_count % sparse == 0)
 					{
 						if (black & bit) cout << "\033[31mX\033[m";
 						else if (white & bit) cout << "O";
 						else cout << "-";
 					}
 				}
-				if(game_count % sparse == 0)
 				if (z + 1 < SIZE) cout << " ";
 			}
-			if(game_count % sparse == 0)
 			cout << "\n";
 		}
-		if(game_count % sparse == 0)
 		cout << "  x=1234 1234 1234 1234" << endl;
 	}
 	
@@ -348,16 +345,10 @@ struct HumanPlayer : Player
 	}
 };
 
+// thread_local int evaluatesfir_tmp[33] = {};
+// thread_local int evaluatessec_tmp[33] = {};
+// thread_local int record_tmp[64] = {};
 
-
-//int evaluatesfir[100000][33] = {};
-//int evaluatessec[100000][33] = {};
-//int record[100000][64] = {};
-
-int evaluatesfir_tmp[33] = {};
-int evaluatessec_tmp[33] = {};
-int record_tmp[64] = {};
-//int game_count = -1;
 struct Game
 {
 	Board board;
@@ -366,24 +357,18 @@ struct Game
 	vector<pair<int, int> > hand, start;
 	bool verbose;
 
-	//int game_count = 0;
+	int evaluatesfir_tmp[33] = {};
+	int evaluatessec_tmp[33] = {};
+	int record_tmp[64] = {};
 
 	Game(Player* p1, Player* p2, bool verbose=false, vector<pair<int, int> > start = {}) : player1(p1), player2(p2), verbose(verbose), start(start)
 	{
 		p1 -> set_verbose(verbose);
 		p2 -> set_verbose(verbose);
-		game_count = game_count + 1;
-		//cout << "in the game game_count = " << game_count << endl;
-		//for(int i = 0; i < 33; i++)evaluatesfir[game_count][i] = INF;
-		//for(int i = 0; i < 33; i++)evaluatessec[game_count][i] = INF;
-		//for(int i = 0; i < 64; i++)record[game_count][i] = INF;
 
 		for(int i = 0; i < 33; i++)evaluatesfir_tmp[i] = INF;
 		for(int i = 0; i < 33; i++)evaluatessec_tmp[i] = INF;
 		for(int i = 0; i < 64; i++)record_tmp[i] = INF;
-		//cout << "reset game_count = " << game_count << endl;
-		
-		
 	}
 
 	enum State move(int turn)
@@ -432,51 +417,37 @@ struct Game
 		enum Color result;
 		if (ret == State::End)
 		{
-			//cout << game_count << endl;
-			//evaluatesfir[game_count][0] = 1;
 			evaluatesfir_tmp[0] = 1;
-			//evaluatessec[game_count][0] = -1;
 			evaluatessec_tmp[0] = -1;
-			if(game_count % sparse == 0)
 			cout << "END : winner is ";
 			if (board.validate() == Color::White)
 			{
 				result = Color::Black;
-				if(game_count % sparse == 0)
 				cout << "\033[31mBlack\033[m";
 			}
 			else
 			{
-				//evaluatesfir[game_count][0] = -1;
 				evaluatesfir_tmp[0] = -1;
-				//evaluatessec[game_count][0] = 1;
 				evaluatessec_tmp[0] = 1;
 				result = Color::White;
-				if(game_count % sparse == 0)
 				cout << "White";
 			}
-			if(game_count % sparse == 0)
 			cout << " by " << hand.size() << " moves" << endl;
 		}
 		else
 		{
-			//evaluatesfir[game_count][0] = 0;
 			evaluatesfir_tmp[0] = 0;
-			//evaluatessec[game_count][0] = 0;
 			evaluatessec_tmp[0] = 0;
 			result = Color::Draw;
-			if(game_count % sparse == 0)
 			cout << "DRAW" << endl;
 		}
 
 		int j = 0;
 		for(auto [x,y] : hand)
 		{
-			//record[game_count][j] = 4*(3 - y) + x;
 			record_tmp[j] = 4*(3 - y) + x;
 			j++;
 		}
-		if(game_count % sparse == 0)
 		{
 			cout << "hands :";
 			int j = 0;
@@ -484,19 +455,13 @@ struct Game
 			cout << endl;
 			cout << "\033[31mfirst (vic or def, evaluates...)\033[m : ";
 			cout<<"\033[31m";
-			//for (int i = 0 ; i<33 ; i++) cout << evaluatesfir[game_count][i] << ",";
-			//cout << endl;
 			for(int i = 0; i < 33; i++) cout << evaluatesfir_tmp[i] << "," ;
 			cout<<"\033[m";
 			cout << endl;
 			cout << "second (vic or def, evaluates...) : ";
-			//for (int i = 0 ; i<33 ; i++) cout << evaluatessec[game_count][i] << ",";
-			//cout << endl;
 			for (int i = 0 ; i<33 ; i++) cout << evaluatessec_tmp[i] << ",";
 			cout << endl;
 			cout << "record";
-			//for(int i = 0; i < 64; i++) cout << record[game_count][i] << ",";
-			//cout << endl;
 			for(int i = 0; i < 64; i++) cout << record_tmp[i] << ",";
             cout << endl;
 		}
@@ -531,6 +496,7 @@ pair<unsigned long long, int> read_DFS(Board board, int level, const F& evaluate
 		const unsigned long long bit = hand & -hand;
 		Board b = board;
 		enum State r = b.place_fast(bit);
+
 		assert(r == State::Continue);
 		int ev = -read_DFS(b, level - 1, evaluate_func).second;
 		if (ev > INF - BOARD_SIZE * 2) ev = ev - 1;
@@ -550,7 +516,10 @@ struct AIPlayer : Player
 	using Player::random;
 	int level;
 	F evaluate_func;
+	Game* game = nullptr;
 	AIPlayer(int level, F evaluate_func) : level(level), evaluate_func(evaluate_func) { assert(level >= 1); }
+
+	void set_game(Game* g) { game = g; }
 
 	//int evaluate_board(Board board, int level, int alpha, int beta)
 	int evaluate_board(Board board, int level, int alpha, int beta)
@@ -562,7 +531,6 @@ struct AIPlayer : Player
 			{
 				const unsigned long long r = hand & Board::reach(board.Me);
 				if (r) return INF - board.turn();
-
 			}
 			{
 				const unsigned long long r = Board::reach(board.You);
@@ -572,8 +540,8 @@ struct AIPlayer : Player
 				if (!hand) return -(INF - (board.turn() + 1));
 			}
 		}
-		const int turn = board.turn();// turn number (the number of stones = turn - 1)
 
+		const int turn = board.turn();// turn number (the number of stones = turn - 1)
         //if(level >= 8 && turn < 27 || level >= 10 && turn >= 27)
 		if(level >= 8 && turn < 46 || level >= 10 && turn >= 46)//教師データ取得用
         {
@@ -586,8 +554,12 @@ struct AIPlayer : Player
                 while (h)
                 {
                     const unsigned long long bit = h & -h;
-                    Board b = board.place_fast_clone(bit);
-		    enum State r = Board::win(b.You);
+                    // Board b = board;
+                    // enum State r = b.place_fast(bit);
+
+					Board b = board.place_fast_clone(bit);
+					enum State r = Board::win(b.You);
+
                     assert(r == State::Continue);
                     int ev = -evaluate_board(b, 3 , -INF , INF);
                     dynamic.push_back(make_pair(ev, bit));
@@ -600,8 +572,12 @@ struct AIPlayer : Player
             {
                 {
                     const unsigned long long bit = dynamic[i].second;
-                    Board b = board.place_fast_clone(bit);
-		    enum State r = Board::win(b.You);
+                    // Board b = board;
+                    // enum State r = b.place_fast(bit);
+
+					Board b = board.place_fast_clone(bit);
+					enum State r = Board::win(b.You);
+
                     assert(r == State::Continue);
                     int ev = -evaluate_board(b, level - 1, -beta, -alpha);
                     alpha = max(alpha, ev);
@@ -620,8 +596,12 @@ struct AIPlayer : Player
                 {
                     const unsigned long long bit = h & -h;
                     //const unsigned long long bit = dynamic[i].second;
-                    Board b = board.place_fast_clone(bit);
-		    enum State r = Board::win(b.You);
+                    // Board b = board;
+                    // enum State r = b.place_fast(bit);
+
+					Board b = board.place_fast_clone(bit);
+					enum State r = Board::win(b.You);
+
                     assert(r == State::Continue);
                     int ev = -evaluate_board(b, level - 1, -beta, -alpha);
                     alpha = max(alpha, ev);
@@ -631,7 +611,6 @@ struct AIPlayer : Player
                 if (alpha >= beta) break;
             }
         }
-        
 		return alpha;
 	}
 
@@ -668,8 +647,12 @@ struct AIPlayer : Player
 			while (h)
 			{
 				const unsigned long long bit = h & -h;
+				// Board b = board;
+				// enum State r = b.place_fast(bit);
+
 				Board b = board.place_fast_clone(bit);
 				enum State r = Board::win(b.You);
+
 				assert(r == State::Continue);
 				int ev = -evaluate_board(b, 3 , -INF , INF);
 				//if (mx < ev) mv = 0uLL, mx = ev;
@@ -691,16 +674,20 @@ struct AIPlayer : Player
 			{
 				//const unsigned long long bit = h & -h;
                 const unsigned long long bit = dynamic[i].second;
+				// Board b = board;
+				// enum State r = b.place_fast(bit);
+
 				Board b = board.place_fast_clone(bit);
 				enum State r = Board::win(b.You);
+
 				assert(r == State::Continue);//下の行について、?nはn+1手読みturn>=45?19:turn>=43?15:turn>=41?13:turn>=39?11:turn>=33?9
 				//int ev = -evaluate_board(b,turn>=46?14:turn>=39?9:level - 1, -INF , -mx + 1);
 				//int ev = -evaluate_board(b,turn>=44?16::level - 1, -INF , -mx + 1);//教師データ用ver3
                 //int ev = -evaluate_board(b,turn>=43?17:turn>=35?9:level - 1, -INF , -mx + 1);//教師データ用ver4,シグモイド関数の係数は920
-				//int ev = -evaluate_board(b,turn>=40?20:turn>=33?11:turn>=25?9:level - 1, -INF , -mx + 1);//教師データ用ver5,シグモイド関数の係数は1840
+				// int ev = -evaluate_board(b,turn>=40?21:turn>=33?11:turn>=25?9:level - 1, -INF , -mx + 1);//教師データ用ver5,シグモイド関数の係数は1840
                 //int ev = -evaluate_board(b, turn>=39?21:turn>=37?12:turn>=29?10:level - 1, -INF , -mx + 1);//この行で途中からの読み手数を変更できる
 				//int ev = -evaluate_board(b, turn>=39?21:turn>35?13:turn>=29?11:level - 1, -INF , -mx + 1);//この行で途中からの読み手数を変更できる
-				int ev = -evaluate_board(b, turn>=39?21:turn>=33?13:turn>=21?11:level - 1, -INF , -mx + 1);//この行で途中からの読み手数を変更できる
+				int ev = -evaluate_board(b, turn>=39?22:turn>=33?13:turn>=21?11:level - 1, -INF , -mx + 1);//この行で途中からの読み手数を変更できる
 				if (mx < ev) mv = 0uLL, mx = ev;
 				if (mx == ev) mv |= bit;
 				//h ^= bit;
@@ -713,13 +700,13 @@ struct AIPlayer : Player
 		if(turn % 2 == 0)
 		{
 			//evaluatessec[game_count][turn >> 1] = mx;
-			evaluatessec_tmp[turn / 2] = mx;
+			game->evaluatessec_tmp[turn / 2] = mx;
 			//cout << "score game_count = " << game_count << endl;
 		}
 		else
 		{
 			//evaluatesfir[game_count][turn + 1 >> 1] = mx;
-			evaluatesfir_tmp[(turn + 1) / 2] = mx;
+			game->evaluatesfir_tmp[(turn + 1) / 2] = mx;
 		}
 		if (verbose)
 		{
@@ -800,23 +787,27 @@ int main()
 {
 	{
 		vector<unsigned long long> lines;
+		// lines.reserve(LINES_NUM);  
 		for (int x = 0; x < SIZE; x++) for (int y = 0; y < SIZE; y++)
 		{
 			unsigned long long line = 0uLL;
 			for (int z = 0; z < SIZE; z++) line |= BIT(x, y, z);
 			lines.push_back(line);
+			
 		}
 		for (int y = 0; y < SIZE; y++) for (int z = 0; z < SIZE; z++)
 		{
 			unsigned long long line = 0uLL;
 			for (int x = 0; x < SIZE; x++) line |= BIT(x, y, z);
 			lines.push_back(line);
+			
 		}
 		for (int z = 0; z < SIZE; z++) for (int x = 0; x < SIZE; x++)
 		{
 			unsigned long long line = 0uLL;
 			for (int y = 0; y < SIZE; y++) line |= BIT(x, y, z);
 			lines.push_back(line);
+			
 		}
 		for (int x = 0; x < SIZE; x++)
 		{
@@ -828,6 +819,7 @@ int main()
 			}
 			lines.push_back(line1);
 			lines.push_back(line2);
+				
 		}
 		for (int y = 0; y < SIZE; y++)
 		{
@@ -839,6 +831,7 @@ int main()
 			}
 			lines.push_back(line1);
 			lines.push_back(line2);
+			
 		}
 		for (int z = 0; z < SIZE; z++)
 		{
@@ -850,6 +843,7 @@ int main()
 			}
 			lines.push_back(line1);
 			lines.push_back(line2);
+			
 		}
 		{
 			unsigned long long line1 = 0uLL, line2 = 0uLL, line3 = 0uLL, line4 = 0uLL;
@@ -864,8 +858,10 @@ int main()
 			lines.push_back(line2);
 			lines.push_back(line3);
 			lines.push_back(line4);
+			
 		}
 		assert(lines.size() == LINES_NUM);
+		
 		for (int j = 0; j < LINES_NUM; j++)
 		{
 			LINES[j] = lines[j];
@@ -900,192 +896,216 @@ int main()
 		assert(mv == 0xffffffffffffffffuLL);
 	}
 
-	auto evaluate = [](const Board &board) -> int
-	{
-		int sum = 0;
-		for (int v : board.count()) sum += v;
-		return sum;
-	};
 	auto evaluate_pointfir = [&](const Board &board, unsigned long long rMe, unsigned long long rYou) -> int
 	{
 		const int turn = board.turn();// turn number (the number of stones = turn - 1)
+		if(turn >= 60){
+			return 0;
+		}
+
 		int sum = 0;
-		// static const int width = 10;//区間の幅の値
-		if(turn <= 59)
+		static const int stdweight[36] = {
+			0,-193,-79,-27,0,22,87,820,0,
+			0,-297,-97,-24,0,25,94,345,0,
+			0,-117,-80,-4,0,31,53,63,0,
+			0,7,-79,-24,0,6,41,103,0
+		};
+		auto count = board.count();
+		const int turn_bucket = (turn - 4) / 14;
+		for (int v : count) sum += stdweight[turn_bucket * 9 + v + 4];//0~4,5~14,...,45~54 
+
+		static const int maketweight[32] = {
+			106,2,43,11,27,-80,8,-27,
+			111,-28,81,41,88,-68,32,-3,
+			355,-9,160,99,227,24,65,58,
+			668,-40,239,130,439,127,106,99
+		};
+
+		for(int i = 0; i < LINES_NUM; i++)
 		{
-		    //static const int weight[9] = {0,-6,-44,-10,0,10,6,3,0};//first
-			static const int stdweight[36] = {
-                0,-132,-56,-21,0,18,49,444,0,
-                0,-216,-75,-22,0,20,75,70,0,
-                0,-121,-81,4,0,31,59,66,0,
-                0,-1,-78,-26,0,15,35,102,0
-            };
-		    auto count = board.count();
-            //for (int v : count) sum += weight[v + 4];
-			const int turn_bucket = (turn - 4) / 14;
-            for (int v : count) sum += stdweight[turn_bucket * 9 + v + 4];//0~4,5~14,...,45~54 
-			//1~7,8~16,17~25,26~34,35~43,44~52,53~61
-
-            static const int maketweight[32] = {
-                53,22,37,21,12,-45,2,-19,
-                156,-14,63,28,79,-66,24,-4,
-                389,26,134,82,123,20,63,52,
-                819,-84,197,90,265,71,91,74
-            };
-
-            for(int i = 0; i < LINES_NUM; i++)
-            {
-                if(count[i] == 2)
-                {
-                    unsigned long long two = ~board.Me & LINES[i];//LINE内の玉が入っていない部分
-                    static const unsigned long long mask_1 = 0x000000000000ffffuLL;
-					static const unsigned long long mask_2 = 0x00000000ffff0000uLL;
-                    static const unsigned long long mask_3 = 0x0000ffff00000000uLL;
-					static const unsigned long long mask_4 = 0xffff000000000000uLL;
-                    unsigned long long floatthree = two & mask_3 & ~((rYou | board.Me | board.You) << SIZE * SIZE);//twoのうち、浮き3段目決勝点の候補
-					/*while(floatthree)
-					{
-						unsigned long long h = floatthree & -floatthree;
-						unsigned long long make = two & ~h;//makeT点						
-                    	sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_1) * maketweight[((turn + 1) / 9)*8 + 0];
-						sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_2) * maketweight[((turn + 1) / 9)*8 + 1];
-						sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_3) * maketweight[((turn + 1) / 9)*8 + 2];
-						sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_4) * maketweight[((turn + 1) / 9)*8 + 3];
-						floatthree ^= h;
-					}*/
+			if(count[i] == 2)
+			{
+				unsigned long long two = ~board.Me & LINES[i];//LINE内の玉が入っていない部分
+				static const unsigned long long mask_1 = 0x000000000000ffffuLL;
+				static const unsigned long long mask_2 = 0x00000000ffff0000uLL;
+				static const unsigned long long mask_3 = 0x0000ffff00000000uLL;
+				static const unsigned long long mask_4 = 0xffff000000000000uLL;
+				unsigned long long floatthree = two & mask_3 & ~((rYou | board.Me | board.You) << SIZE * SIZE);//twoのうち、浮き3段目決勝点の候補
+				/*while(floatthree)
+				{
+					unsigned long long h = floatthree & -floatthree;
+					unsigned long long make = two & ~h;//makeT点						
+					sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_1) * maketweight[((turn + 1) / 9)*8 + 0];
+					sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_2) * maketweight[((turn + 1) / 9)*8 + 1];
+					sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_3) * maketweight[((turn + 1) / 9)*8 + 2];
+					sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_4) * maketweight[((turn + 1) / 9)*8 + 3];
+					floatthree ^= h;
+				}*/
+				if(floatthree)
+				{
+					unsigned long long h = floatthree & -floatthree;
+					unsigned long long make = two & ~h;//makeT点						
+					sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket * 8 + 0];
+					sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket * 8 + 1];
+					sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_3) * maketweight[turn_bucket * 8 + 2];
+					sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_4) * maketweight[turn_bucket * 8 + 3];
+					floatthree ^= h;
 					if(floatthree)
 					{
-						unsigned long long h = floatthree & -floatthree;
-						unsigned long long make = two & ~h;//makeT点						
-                    	sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket * 8 + 0];
-						sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket * 8 + 1];
-						sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_3) * maketweight[turn_bucket * 8 + 2];
-						sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_4) * maketweight[turn_bucket * 8 + 3];
-						floatthree ^= h;
-						if(floatthree)
-						{
-							//unsigned long long h = floatthree & -floatthree;
-							unsigned long long make = two & ~floatthree;//makeT点						
-							sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket * 8 + 0];
-							sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket * 8 + 1];
-							sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_3) * maketweight[turn_bucket * 8 + 2];
-							sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_4) * maketweight[turn_bucket * 8 + 3];
-							//floatthree ^= h;
-						}
+						//unsigned long long h = floatthree & -floatthree;
+						// unsigned long long make = two & ~floatthree;//makeT点						
+						// sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket * 8 + 0];
+						// sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket * 8 + 1];
+						sum += __builtin_popcountll(h & ~(rYou >> SIZE*SIZE)) * maketweight[turn_bucket * 8 + 2];
+						// sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_4) * maketweight[turn_bucket * 8 + 3];
+						//floatthree ^= h;
 					}
-
-                }
-                else if(count[i] == -2)
-                {
-                    unsigned long long two = ~board.You & LINES[i];
-                    static const unsigned long long mask_1 = 0x000000000000ffffuLL;
-					static const unsigned long long mask_2 = 0x00000000ffff0000uLL;
-                    static const unsigned long long mask_3 = 0x0000ffff00000000uLL;
-					static const unsigned long long mask_4 = 0xffff000000000000uLL;
-                    unsigned long long floatthree = two & mask_3 & ~((rMe | board.Me | board.You) << SIZE * SIZE);
-					/*while(floatthree)
-					{
-						unsigned long long h = floatthree & -floatthree;
-						unsigned long long make = two & ~h;
-						sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_1) * maketweight[((turn + 1) / 9)*8 + 4];
-						sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_2) * maketweight[((turn + 1) / 9)*8 + 5];
-						sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_3) * maketweight[((turn + 1) / 9)*8 + 6];
-						sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_4) * maketweight[((turn + 1) / 9)*8 + 7];
-						floatthree ^= h;
-					}*/
+				}
+			}
+			else if(count[i] == -2)
+			{
+				unsigned long long two = ~board.You & LINES[i];
+				static const unsigned long long mask_1 = 0x000000000000ffffuLL;
+				static const unsigned long long mask_2 = 0x00000000ffff0000uLL;
+				static const unsigned long long mask_3 = 0x0000ffff00000000uLL;
+				static const unsigned long long mask_4 = 0xffff000000000000uLL;
+				unsigned long long floatthree = two & mask_3 & ~((rMe | board.Me | board.You) << SIZE * SIZE);
+				/*while(floatthree)
+				{
+					unsigned long long h = floatthree & -floatthree;
+					unsigned long long make = two & ~h;
+					sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_1) * maketweight[((turn + 1) / 9)*8 + 4];
+					sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_2) * maketweight[((turn + 1) / 9)*8 + 5];
+					sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_3) * maketweight[((turn + 1) / 9)*8 + 6];
+					sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_4) * maketweight[((turn + 1) / 9)*8 + 7];
+					floatthree ^= h;
+				}*/
+				if(floatthree)
+				{
+					unsigned long long h = floatthree & -floatthree;
+					unsigned long long make = two & ~h;
+					sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket * 8 + 4];
+					sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket * 8 + 5];
+					sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_3) * maketweight[turn_bucket * 8 + 6];
+					sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_4) * maketweight[turn_bucket * 8 + 7];
+					floatthree ^= h;
 					if(floatthree)
 					{
-						unsigned long long h = floatthree & -floatthree;
-						unsigned long long make = two & ~h;
-						sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket * 8 + 4];
-						sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket * 8 + 5];
-						sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_3) * maketweight[turn_bucket * 8 + 6];
-						sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_4) * maketweight[turn_bucket * 8 + 7];
-						floatthree ^= h;
-						if(floatthree)
-						{
-							//unsigned long long h = floatthree & -floatthree;
-							unsigned long long make = two & ~floatthree;
-							sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket * 8 + 4];
-							sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket * 8 + 5];
-							sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_3) * maketweight[turn_bucket * 8 + 6];
-							sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_4) * maketweight[turn_bucket * 8 + 7];
-							//floatthree ^= h;
-						}
+						//unsigned long long h = floatthree & -floatthree;
+						// unsigned long long make = two & ~floatthree;
+						// sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket * 8 + 4];
+						// sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket * 8 + 5];
+						sum -= __builtin_popcountll(h & ~(rMe >> SIZE*SIZE)) * maketweight[turn_bucket * 8 + 6];
+						// sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_4) * maketweight[turn_bucket * 8 + 7];
+						//floatthree ^= h;
 					}
-                }
-            }
-        }
+				}
+			}
+		}
         return sum;
 
 	};
 	auto evaluate_pointsec = [&](const Board &board, unsigned long long rMe, unsigned long long rYou) -> int
 	{
 		const int turn = board.turn();// turn number (the number of stones = turn - 1)
+		if(turn >= 60){
+			return 0;
+		}
 		int sum = 0;
-		if(turn <= 59)
+		static const int weight[36] = {
+			0,-149,-57,-14,0,26,63,331,0,
+			0,-204,-68,-19,0,26,110,289,0,
+			0,-64,-39,-14,0,23,100,106,0,
+			0,48,-21,25,0,42,109,118,0
+		};
+		
+		auto count = board.count();
+		const int turn_bucket = (turn - 5) / 14;
+		for (int v : count) sum += weight[turn_bucket * 9 + v + 4];//1~3,4~13,...,44~53
+		static const int maketweight[32] = {
+			83,-39,23,-15,120,43,60,34,
+			70,-48,29,-6,106,-25,79,51,
+			235,12,62,49,323,24,163,107,
+			404,79,100,90,661,-14,249,144
+		};
+
+		static const unsigned long long mask_1 = 0x000000000000ffffuLL;
+		static const unsigned long long mask_2 = 0x00000000ffff0000uLL;
+		static const unsigned long long mask_3 = 0x0000ffff00000000uLL;
+		static const unsigned long long mask_4 = 0xffff000000000000uLL;
+		for(int i = 0; i < LINES_NUM; i++)
 		{
-		    static const int weight[36] = {
-				0,-111,-30,-8,0,28,45,323,0,
-				0,-246,-65,-12,0,33,97,117,0,
-				0,-61,-34,-5,0,14,95,94,0,
-				0,50,-18,12,0,41,106,97,0
-			};
-			
-		    auto count = board.count();
-			const int turn_bucket = (turn - 5) / 14;
-            for (int v : count) sum += weight[turn_bucket * 9 + v + 4];//1~3,4~13,...,44~53
-			static const int maketweight[32] = {
-				19,-31,19,-5,100,69,44,34,
-				52,-51,25,-1,113,6,64,38,
-				137,-15,69,40,408,12,155,106,
-				130,-16,76,48,887,-74,198,107
-			};
-
-            for(int i = 0; i < LINES_NUM; i++)
-            {
-                if(count[i] == 2)
-                {
-                    unsigned long long two = ~board.Me & LINES[i];//LINE内の玉が入っていない部分
-                    static const unsigned long long mask_1 = 0x000000000000ffffuLL;
-					static const unsigned long long mask_2 = 0x00000000ffff0000uLL;
-                    static const unsigned long long mask_3 = 0x0000ffff00000000uLL;
-					static const unsigned long long mask_4 = 0xffff000000000000uLL;
-                    unsigned long long floatthree = two & mask_3 & ~((rYou | board.Me | board.You) << SIZE * SIZE);//twoのうち、浮き3段目決勝点の候補
-					while(floatthree)
+			if(count[i] == 2)
+			{
+				unsigned long long two = ~board.Me & LINES[i];//LINE内の玉が入っていない部分
+				unsigned long long floatthree = two & mask_3 & ~((rYou | board.Me | board.You) << SIZE * SIZE);//twoのうち、浮き3段目決勝点の候補
+				/*while(floatthree)
+				{
+					unsigned long long h = floatthree & -floatthree;
+					unsigned long long make = two & ~h;//makeT点						
+					sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket * 8 + 0];
+					sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket * 8 + 1];
+					sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_3) * maketweight[turn_bucket * 8 + 2];
+					sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_4) * maketweight[turn_bucket * 8 + 3];
+					floatthree ^= h;
+				}*/
+				if(floatthree)
+				{
+					unsigned long long h = floatthree & -floatthree;
+					unsigned long long make = two & ~h;//makeT点						
+					sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket * 8 + 0];
+					sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket * 8 + 1];
+					sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_3) * maketweight[turn_bucket * 8 + 2];
+					sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_4) * maketweight[turn_bucket * 8 + 3];
+					floatthree ^= h;
+					if(floatthree)
 					{
-						unsigned long long h = floatthree & -floatthree;
-						unsigned long long make = two & ~h;//makeT点						
-                    	sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket * 8 + 0];
-						sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket * 8 + 1];
-						sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_3) * maketweight[turn_bucket * 8 + 2];
-						sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_4) * maketweight[turn_bucket * 8 + 3];
-						floatthree ^= h;
+						// unsigned long long make = two & ~floatthree;//makeT点						
+						// sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket * 8 + 0];
+						// sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket * 8 + 1];
+						sum += __builtin_popcountll(h & ~(rYou >> SIZE*SIZE)) * maketweight[turn_bucket * 8 + 2];
+						// sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_4) * maketweight[turn_bucket * 8 + 3];
+						//floatthree ^= h;
 					}
-                }
-                else if(count[i] == -2)
-                {
-                    unsigned long long two = ~board.You & LINES[i];
-                    static const unsigned long long mask_1 = 0x000000000000ffffuLL;
-					static const unsigned long long mask_2 = 0x00000000ffff0000uLL;
-                    static const unsigned long long mask_3 = 0x0000ffff00000000uLL;
-					static const unsigned long long mask_4 = 0xffff000000000000uLL;
-                    unsigned long long floatthree = two & mask_3 & ~((rMe | board.Me | board.You) << SIZE * SIZE);
-					while(floatthree)
+				}
+			}
+			else if(count[i] == -2)
+			{
+				unsigned long long two = ~board.You & LINES[i];
+				unsigned long long floatthree = two & mask_3 & ~((rMe | board.Me | board.You) << SIZE * SIZE);
+				/*while(floatthree)
+				{
+					unsigned long long h = floatthree & -floatthree;
+					unsigned long long make = two & ~h;
+					sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket * 8 + 4];
+					sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket * 8 + 5];
+					sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_3) * maketweight[turn_bucket * 8 + 6];
+					sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_4) * maketweight[turn_bucket * 8 + 7];
+					floatthree ^= h;
+				}*/
+				if(floatthree)
+				{
+					unsigned long long h = floatthree & -floatthree;
+					unsigned long long make = two & ~h;
+					sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket * 8 + 4];
+					sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket * 8 + 5];
+					sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_3) * maketweight[turn_bucket * 8 + 6];
+					sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_4) * maketweight[turn_bucket * 8 + 7];
+					floatthree ^= h;
+					if(floatthree)
 					{
-						unsigned long long h = floatthree & -floatthree;
-						unsigned long long make = two & ~h;
-						sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket * 8 + 4];
-						sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket * 8 + 5];
-						sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_3) * maketweight[turn_bucket * 8 + 6];
-						sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_4) * maketweight[turn_bucket * 8 + 7];
-						floatthree ^= h;
+						// unsigned long long make = two & ~floatthree;
+						// sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket * 8 + 4];
+						// sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket * 8 + 5];
+						sum -= __builtin_popcountll(h & ~(rMe >> SIZE*SIZE)) * maketweight[turn_bucket * 8 + 6];
+						// sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_4) * maketweight[turn_bucket * 8 + 7];
+						//floatthree ^= h;
 					}
-                }
-            }
-        }
+				}
+				
+			}
+		}
         return sum;
-
 	};
 	auto evaluate_random = [](const Board &board) -> int
 	{
@@ -1094,16 +1114,22 @@ int main()
 	auto continuous_fir = [](const Board &board, unsigned long long rMe, const unsigned long long rYou) -> int
 	{
 		const int turn = board.turn();// turn number (the number of stones = turn - 1)
+		if(turn >= 60){
+			return 0;
+		}
 		rMe &= ~(rYou << SIZE * SIZE);
-		static const int parameter[4] = {1252,1116,790,512};
+		static const int parameter[4] = {596,1202,839,572};
 		//assert(turn < 64);
 		return __builtin_popcountll(rMe & rMe << SIZE * SIZE) * parameter[(turn - 4) / 14];
 	};
 	auto continuous_sec = [](const Board &board, unsigned long long rMe, const unsigned long long rYou) -> int
 	{
 		const int turn = board.turn();// turn number (the number of stones = turn - 1)
+		if(turn >= 60){
+			return 0;
+		}
 		rMe &= ~(rYou << SIZE * SIZE);
-		static const int parameter[4] = {1308,1154,940,1035};
+		static const int parameter[4] = {865,920,836,882};
 		return __builtin_popcountll(rMe & rMe << SIZE * SIZE) * parameter[(turn - 5) / 14];
 	};
 	auto reach_layer_intersection = [&](const Board &board, const enum Color now, unsigned long long rMe, unsigned long long rYou, const unsigned long long hand) -> int
@@ -1123,85 +1149,9 @@ int main()
 		rMe ^= intersection_3;
 		rYou ^= intersection_3;
 
-        static const int weightfir[40] = {
-			-295,-1,-365,103,-16,18,-393,943,326,-697,
-            127,538,77,25,66,-33,544,-209,-47,-175,
-            113,749,62,190,501,154,458,352,952,-407,
-            34,1167,45,502,1041,362,696,834,845,412
-        };
-        static const int weightsec[40] = {
-            -132,-182,-164,24,387,-40,363,-555,567,355,
-            184,227,90,-52,360,-93,228,278,-439,-601,
-            182,573,163,135,854,68,535,433,1055,649,
-            331,931,244,257,1440,222,1086,199,1747,911
-        };
-
 		int sum = 0;
-		if(turn <= 59)
-		{
-			if (now == Color::Black)
-            {//first (black) player
-                {//Me, first (black) player
-                    sum += __builtin_popcountll(rMe & mask_2) * weightfir[((turn - 4) / 14)*10 + 0];//2nd layer_intersection_fir
-                    sum += __builtin_popcountll(rMe & mask_3) * weightfir[((turn - 4) / 14)*10 + 1];//3rd layer_intersection_fir
-                    sum += __builtin_popcountll(rMe & mask_4) * weightfir[((turn - 4) / 14)*10 + 2];//4th layer_intersection_fir
-                }
-                {//You, second (white) player
-                    sum -= __builtin_popcountll(rYou & mask_2) * weightfir[((turn - 4) / 14)*10 + 3];//2nd layer_intersection_fir
-                    sum -= __builtin_popcountll(rYou & mask_3) * weightfir[((turn - 4) / 14)*10 + 4];//3rd layer_intersection_fir
-                    sum -= __builtin_popcountll(rYou & mask_4) * weightfir[((turn - 4) / 14)*10 + 5];//4th layer_intersection_fir
-                }
-                if (intersection_3)
-                {//if there exists intersections of reaches on 3rd layer
-                    int intersection = __builtin_popcountll(intersection_3);
-                    //assert(intersection < 5);
-                    //if (__builtin_parityll(intersection_3))
-                    if(intersection == 1)
-                    {//odd, black = Me
-                        sum += weightfir[((turn - 4) / 14)*10 + 6];
-                    }
-                    else if(intersection == 2)
-                    {//even, white = You
-                        sum -= weightfir[((turn - 4) / 14)*10 + 7];
-                    }
-                    else if(intersection == 3)
-                    sum += weightfir[((turn - 4) / 14)*10 + 8];
-					else if(intersection == 4)
-					sum -= weightfir[((turn - 4) / 14)*10 + 9];
-                }
-            }
-            else
-            {//second (white) player
-                {//Me, second (white) player
-                    sum += __builtin_popcountll(rMe & mask_2) * weightsec[((turn - 5) / 14)*10 + 0];//2nd layer_intersection_sec
-                    sum += __builtin_popcountll(rMe & mask_3) * weightsec[((turn - 5) / 14)*10 + 1];//3rd layer_intersection_sec
-                    sum += __builtin_popcountll(rMe & mask_4) * weightsec[((turn - 5) / 14)*10 + 2];//4th layer_intersection_sec
-                }
-                {//You, first (black) player
-                    sum -= __builtin_popcountll(rYou & mask_2) * weightsec[((turn - 5) / 14)*10 + 3];//2nd layer_intersection_sec
-                    sum -= __builtin_popcountll(rYou & mask_3) * weightsec[((turn - 5) / 14)*10 + 4];//3rd layer_intersection_sec
-                    sum -= __builtin_popcountll(rYou & mask_4) * weightsec[((turn - 5) / 14)*10 + 5];//4th layer_intersection_sec
-                }
-                if (intersection_3)
-                {//if there exists intersections of reaches on 3rd layer
-					int intersection = __builtin_popcountll(intersection_3);
-                    if (intersection == 1)
-                    {//odd, black = You
-                        sum -= weightsec[((turn - 5) / 14)*10 + 6];
-                    }
-                    else if(intersection == 2)
-                    {//even, white = Me
-                        sum += weightsec[((turn - 5) / 14)*10 + 7];
-                    }
-					else if(intersection == 3)
-					sum -= weightsec[((turn - 5) / 14)*10 + 8];
-					else if(intersection == 4)
-					sum += weightsec[((turn - 5) / 14)*10 + 9];
-                }
-            }
-        }
-		else// if(turn >= 60)
-		{
+
+		if(turn >= 60){
 			if(now == Color::Black)
 			{
 				if(rMe & mask_3 || intersection_3) sum = INF - 100000;
@@ -1212,82 +1162,83 @@ int main()
 				if(rMe & mask_4) sum = INF -100000;	
 				else if(rYou & mask_3 || intersection_3) sum = - INF + 100000;
 			}
+			return sum;
+		}
+
+        static const int weightfir[40] = {
+			-567,-311,-645,32,0,-56,195,-292,-19,322,
+            -94,327,-151,-15,54,-78,358,-333,254,913,
+            68,737,51,194,487,145,454,316,1265,-330,
+            38,1154,67,487,1045,393,700,952,385,312
+        };
+        static const int weightsec[40] = {
+            -133,-98,-189,35,329,-12,548,793,-595,-521,
+            -17,97,-59,11,386,-39,407,-287,-214,280,
+            209,531,148,105,783,74,500,312,1306,-741,
+            272,908,236,274,1458,247,1154,221,1590,957
+        };
+
+		if (now == Color::Black)
+		{//first (black) player
+			{//Me, first (black) player
+				sum += __builtin_popcountll(rMe & mask_2) * weightfir[((turn - 4) / 14)*10 + 0];//2nd layer_intersection_fir
+				sum += __builtin_popcountll(rMe & mask_3) * weightfir[((turn - 4) / 14)*10 + 1];//3rd layer_intersection_fir
+				sum += __builtin_popcountll(rMe & mask_4) * weightfir[((turn - 4) / 14)*10 + 2];//4th layer_intersection_fir
+			}
+			{//You, second (white) player
+				sum -= __builtin_popcountll(rYou & mask_2) * weightfir[((turn - 4) / 14)*10 + 3];//2nd layer_intersection_fir
+				sum -= __builtin_popcountll(rYou & mask_3) * weightfir[((turn - 4) / 14)*10 + 4];//3rd layer_intersection_fir
+				sum -= __builtin_popcountll(rYou & mask_4) * weightfir[((turn - 4) / 14)*10 + 5];//4th layer_intersection_fir
+			}
+			if (intersection_3)
+			{//if there exists intersections of reaches on 3rd layer
+				int intersection = __builtin_popcountll(intersection_3);
+				//assert(intersection < 5);
+				//if (__builtin_parityll(intersection_3))
+				if(intersection == 1)
+				{//odd, black = Me
+					sum += weightfir[((turn - 4) / 14)*10 + 6];
+				}
+				else if(intersection == 2)
+				{//even, white = You
+					sum -= weightfir[((turn - 4) / 14)*10 + 7];
+				}
+				else if(intersection == 3)
+				sum += weightfir[((turn - 4) / 14)*10 + 8];
+				else if(intersection == 4)
+				sum -= weightfir[((turn - 4) / 14)*10 + 9];
+			}
+		}
+		else
+		{//second (white) player
+			{//Me, second (white) player
+				sum += __builtin_popcountll(rMe & mask_2) * weightsec[((turn - 5) / 14)*10 + 0];//2nd layer_intersection_sec
+				sum += __builtin_popcountll(rMe & mask_3) * weightsec[((turn - 5) / 14)*10 + 1];//3rd layer_intersection_sec
+				sum += __builtin_popcountll(rMe & mask_4) * weightsec[((turn - 5) / 14)*10 + 2];//4th layer_intersection_sec
+			}
+			{//You, first (black) player
+				sum -= __builtin_popcountll(rYou & mask_2) * weightsec[((turn - 5) / 14)*10 + 3];//2nd layer_intersection_sec
+				sum -= __builtin_popcountll(rYou & mask_3) * weightsec[((turn - 5) / 14)*10 + 4];//3rd layer_intersection_sec
+				sum -= __builtin_popcountll(rYou & mask_4) * weightsec[((turn - 5) / 14)*10 + 5];//4th layer_intersection_sec
+			}
+			if (intersection_3)
+			{//if there exists intersections of reaches on 3rd layer
+				int intersection = __builtin_popcountll(intersection_3);
+				if (intersection == 1)
+				{//odd, black = You
+					sum -= weightsec[((turn - 5) / 14)*10 + 6];
+				}
+				else if(intersection == 2)
+				{//even, white = Me
+					sum += weightsec[((turn - 5) / 14)*10 + 7];
+				}
+				else if(intersection == 3)
+				sum -= weightsec[((turn - 5) / 14)*10 + 8];
+				else if(intersection == 4)
+				sum += weightsec[((turn - 5) / 14)*10 + 9];
+			}
 		}
 		return sum;
-	};
-	auto reach_layer = [&](const Board &board, const enum Color now, unsigned long long rMe, unsigned long long rYou, const unsigned long long hand) -> int
-	{
-		const unsigned long long rMe_tmp = rMe & ~(hand | rYou << SIZE * SIZE);
-		const unsigned long long rYou_tmp = rYou & ~(hand | rMe << SIZE * SIZE);
-		rMe = rMe_tmp, rYou = rYou_tmp;
-		//rMe &= ~hand;
-		//rYou &= ~hand;
-		static const unsigned long long mask_2 = 0x00000000ffff0000uLL;
-		static const unsigned long long mask_3 = 0x0000ffff00000000uLL;
-		static const unsigned long long mask_4 = 0xffff000000000000uLL;
-
-		const int turn = board.turn();// turn number (the number of stones = turn - 1)
-
-		int sum = 0;
-		if(turn <= 59)
-		{
-			if (now == Color::Black)
-			{//first (black) player
-				{//Me, first (black) player
-					sum += __builtin_popcountll(rMe & mask_2) * 48;//2nd layer_fir
-					sum += __builtin_popcountll(rMe & mask_3) * 140;//3rd layer_fir
-					sum += __builtin_popcountll(rMe & mask_4) * 11;//4th layer_fir
-				}
-				{//You, second (white) player
-					sum -= __builtin_popcountll(rYou & mask_2) * 64;//2nd layer_fir
-					sum -= __builtin_popcountll(rYou & mask_3) * 140;//3rd layer_fir
-					sum -= __builtin_popcountll(rYou & mask_4) * 16;//4th layer_fir
-				}
-			}
-			else
-			{//second (white) player
-				{//Me, second (white) player
-					sum += __builtin_popcountll(rMe & mask_2) * 48;//2nd layer_sec
-					sum += __builtin_popcountll(rMe & mask_3) * 64;//3rd layer_sec
-					sum += __builtin_popcountll(rMe & mask_4) * 16;//4th layer_sec
-				}
-				{//You, first (black) player
-					sum -= __builtin_popcountll(rYou & mask_2) * 64;//2nd layer_sec
-					sum -= __builtin_popcountll(rYou & mask_3) * 48;//3rd layer_sec
-					sum -= __builtin_popcountll(rYou & mask_4) * 16;//4th layer_sec
-				}
-			}
-		}
-		else if(turn >= 60)
-		{
-			if(now == Color::Black)
-			{
-				if(rMe & mask_3) sum = INF - 100000;
-				else if(rYou & mask_2 | rYou & mask_4) sum = - INF + 100000;
-			}
-			else
-			{
-				if(rMe & mask_4) sum = INF -100000;
-				else if(rYou & mask_3) sum = - INF + 100000;
-			}
-		}
-		return sum;
-	};
-	auto evaluate_layer = [&](const Board &board) -> int
-	{
-		const enum Color now = board.player();
-		const unsigned long long rMe = Board::reach(board.Me) & ~board.You;
-		const unsigned long long rYou = Board::reach(board.You) & ~board.Me;
-		const unsigned long long hand = board.valid_move();
-		return evaluate(board) + reach_layer(board,now, rMe, rYou, hand);
-	};
-	auto evaluate_pointfir_cont_layer = [&](const Board &board) -> int
-	{
-		const enum Color now = board.player();
-		const unsigned long long rMe = Board::reach(board.Me) & ~board.You;
-		const unsigned long long rYou = Board::reach(board.You) & ~board.Me;
-		const unsigned long long hand = board.valid_move();
-		return evaluate_pointfir(board, rMe, rYou) + continuous_fir(board, rMe, rYou) - continuous_fir(board, rYou, rMe) + reach_layer(board,now, rMe, rYou, hand);
 	};
 	auto evaluate_pointfir_cont_layer_intersection = [&](const Board &board) -> int
 	{
@@ -1297,15 +1248,7 @@ int main()
 		const unsigned long long hand = board.valid_move();
 		return evaluate_pointfir(board, rMe, rYou) + continuous_fir(board, rMe, rYou) - continuous_fir(board, rYou, rMe) + reach_layer_intersection(board,now, rMe, rYou, hand);
 	};
-    auto evaluate_pointsec_cont_layer = [&](const Board &board) -> int
-	{
-		const enum Color now = board.player();
-		const unsigned long long rMe = Board::reach(board.Me) & ~board.You;
-		const unsigned long long rYou = Board::reach(board.You) & ~board.Me;
-		const unsigned long long hand = board.valid_move();
-		return evaluate_pointsec(board, rMe, rYou) + continuous_sec(board, rMe, rYou) - continuous_sec(board, rYou, rMe) + reach_layer(board,now, rMe, rYou, hand);
-	};
-	 auto evaluate_pointsec_cont_layer_intersection = [&](const Board &board) -> int
+	auto evaluate_pointsec_cont_layer_intersection = [&](const Board &board) -> int
 	{
 		const enum Color now = board.player();
 		const unsigned long long rMe = Board::reach(board.Me) & ~board.You;
@@ -1313,27 +1256,21 @@ int main()
 		const unsigned long long hand = board.valid_move();
 		return evaluate_pointsec(board, rMe, rYou) + continuous_sec(board, rMe, rYou) - continuous_sec(board, rYou, rMe) + reach_layer_intersection(board,now, rMe, rYou, hand);
 	};
-	auto evaluate_pointfir_layer_intersection = [&](const Board &board) -> int
-	{
-		const enum Color now = board.player();
-		const unsigned long long rMe = Board::reach(board.Me) & ~board.You;
-		const unsigned long long rYou = Board::reach(board.You) & ~board.Me;
-		const unsigned long long hand = board.valid_move();
-		return evaluate_pointfir(board, rMe, rYou) + reach_layer_intersection(board,now, rMe, rYou, hand);
-	};
 
 	HumanPlayer H;
 	AIPlayer p1(10, evaluate_pointfir_cont_layer_intersection);
 	AIPlayer p2(10, evaluate_pointsec_cont_layer_intersection);
 	AIPlayer p3(6, evaluate_random);//全ランダム
 	AIPlayer p4(6, evaluate_random);//全ランダム
-	//p1.set_random(10);
-	//p2.set_random(10);//一部ランダム
+	// p1.set_random(10);
+	// p2.set_random(10);//一部ランダム
 	Game game(&p1, &p2, true, {});//ゲーム設定
+	p1.set_game(&game);
+	p2.set_game(&game);
 	game.game();//連続で試合をする場合はここをコメントアウトする
 	return 0;//連続で試合をする場合はここをコメントアウトする
 	int cnt[3] = {};
-	static const int N = 8192;//<=100000
+	static const int N = 4096;//<=100000 4096 8192
 
 	//return 0;
 	
@@ -1345,13 +1282,86 @@ int main()
 	std::ofstream ofs_second_evaluate(output_second_evaluate);
 	std::ofstream ofs_record(output_record);
 
-	const bool display = false;//表示の変更
-	//static const vector<pair<int, int>> start = {};
-	static const int start[4] = {0, 1, 2, 3}; 
+	cout << "max_threads : " <<  omp_get_max_threads() << endl;
+	omp_set_num_threads(2);
 
+	int setting = 2;
+
+	std::string output_first[setting];
+	std::string output_second[setting];
+	std::string output_records[setting];
+
+	std::ofstream ofs_first[setting];
+	std::ofstream ofs_second[setting];
+	std::ofstream ofs_records[setting];
+
+	for(int i = 0; i < setting; i++){
+		output_first[i] = "/yonmoku/first_evaluate_ver5_esc_thread" + std::to_string(i) + ".csv";
+		output_second[i] = "/yonmoku/second_evaluate_ver5_esc_thread" + std::to_string(i) + ".csv";
+		output_records[i] = "/yonmoku/record_ver5_esc_thread" + std::to_string(i) + ".csv";
+	}
+	for(int i = 0; i < setting; i++){
+		ofs_first[i].open(output_first[i]);
+		ofs_second[i].open(output_second[i]);
+		ofs_records[i].open(output_records[i]);
+	}
+
+	const bool display = false;//表示の変更
+	static const int start[4] = {0, 1, 2, 3}; 
+	int gameNum[setting];
+	for(int i = 0; i < setting; i++){
+		gameNum[i] = 0;
+	}
+
+	# pragma omp parallel private(rng, rng_thread_num)
+	{
+		for(int t = 0; t < N; t++)
+		{
+			int thread = omp_get_thread_num();
+			AIPlayer p1(8, evaluate_pointfir_cont_layer_intersection);
+			AIPlayer p2(8, evaluate_pointsec_cont_layer_intersection);
+			p1.set_random(10);
+			p2.set_random(10);//一部ランダム
+
+			// cout << "Game #" << t  << endl;
+			Game game(&p1, &p2, display, {{start[t % 4], start[(t / 4) % 4]}, {start[(t / 16) % 4], start[(t / 64) % 4]}, 
+											{start[(t / 256) % 4], start[(t / 1024) % 4]}});
+			p1.set_game(&game);
+        	p2.set_game(&game);
+			enum Color r = game.game();
+			cnt[r]++;
+			gameNum[thread]++;
+			cout << "thread = " << thread << endl;
+			cout << "Black : " << cnt[Color::Black] << endl;
+			cout << "White : " << cnt[Color::White] << endl;
+			cout << " Draw : " << cnt[Color::Draw] << endl;
+			cout << "each thread ";
+			for(int i = 0; i < setting; i++){
+				cout << gameNum[i] << ",";
+			}
+			cout << "times game have finished" << endl;
+			for(int i = 1; i < 33; i++)
+			{
+				ofs_first[thread] << game.evaluatesfir_tmp[i] << ",";
+			}
+			ofs_first[thread] << std::endl;
+			for(int i = 1; i < 33; i++)
+			{
+				ofs_second[thread] << game.evaluatessec_tmp[i] << ",";
+			}
+			ofs_second[thread] << std::endl;
+			for(int i = 0; i < 64; i++)
+			{
+				ofs_records[thread] << game.record_tmp[i] << ",";
+			}
+			ofs_records[thread] << std::endl;
+			// #pragma omp barrier
+		}
+	}
+	return 0;
 	for(int t = 0; t < N; t++)
 	{
-		if(t % sparse == 1 || t == N || sparse == 1)
+		//if(t % sparse == 1 || t == N || sparse == 1)
 		{
 			cout << "Game #" << t << endl;
 		}
@@ -1359,7 +1369,7 @@ int main()
 										{start[(t / 256) % 4], start[(t / 1024) % 4]}});
 		enum Color r = game.game();
 		cnt[r]++;
-		if(t % sparse == 0 || t == N)
+		//if(t % sparse == 0 || t == N)
 		{
 			cout << "Black : " << cnt[Color::Black] << endl;
 			cout << "White : " << cnt[Color::White] << endl;
@@ -1368,155 +1378,23 @@ int main()
 		for(int i = 1; i < 33; i++)
 		{
 			//ofs_first_evaluate << evaluatesfir[t][i] << ",";
-			ofs_first_evaluate << evaluatesfir_tmp[i] << ",";
+			ofs_first_evaluate << game.evaluatesfir_tmp[i] << ",";
 		}
 		ofs_first_evaluate << std::endl;
 		for(int i = 1; i < 33; i++)
 		{
 			//ofs_second_evaluate << evaluatessec[t][i] << ",";
-			ofs_second_evaluate << evaluatessec_tmp[i] << ",";
+			ofs_second_evaluate << game.evaluatessec_tmp[i] << ",";
 		}
 		ofs_second_evaluate << std::endl;
 		for(int i = 0; i < 64; i++)
 		{
 			//ofs_record << record[t][i] << ",";
-			ofs_record << record_tmp[i] << ",";
+			ofs_record << game.record_tmp[i] << ",";
 		}
 		ofs_record << std::endl;
 	}
 
-	/*
-	for (int t = 1; t<=N; t++)
-	{
-		if(t<=5000 && t % 3 <= 1)//平行
-		{
-			if(t % sparse == 1 || t == N || sparse == 1)
-			cout << "Game #" << t << endl;
-			Game game(&p1, &p2, display, {{0,0}});
-			enum Color r = game.game();
-			cnt[r]++;
-			if(t % sparse == 0 || t == N)
-			{
-				cout << "Black : " << cnt[Color::Black] << endl;
-				cout << "White : " << cnt[Color::White] << endl;
-				cout << " Draw : " << cnt[Color::Draw] << endl;
-			}
-			for(int i = 1; i < 33; i++)
-			{
-				//ofs_first_evaluate << evaluatesfir[t][i] << ",";
-				ofs_first_evaluate << evaluatesfir_tmp[i] << ",";
-			}
-			ofs_first_evaluate << std::endl;
-			for(int i = 1; i < 33; i++)
-			{
-				//ofs_second_evaluate << evaluatessec[t][i] << ",";
-				ofs_second_evaluate << evaluatessec_tmp[i] << ",";
-			}
-			ofs_second_evaluate << std::endl;
-			for(int i = 0; i < 64; i++)
-			{
-				//ofs_record << record[t][i] << ",";
-				ofs_record << record_tmp[i] << ",";
-			}
-			ofs_record << std::endl;
-		}
-		else if(t <= 5000 && t % 3 == 2)//対角
-		{
-			if(t % sparse == 1 || t == N || sparse == 1)
-			cout << "Game #" << t << endl;
-			Game game(&p1, &p2, display, {{0,0},{0,3},{3,3}});
-			enum Color r = game.game();
-			cnt[r]++;
-			if(t % sparse == 0 || t == N)
-			{
-				cout << "Black : " << cnt[Color::Black] << endl;
-				cout << "White : " << cnt[Color::White] << endl;
-				cout << " Draw : " << cnt[Color::Draw] << endl;
-			}
-			for(int i = 1; i < 33; i++)
-			{
-				//ofs_first_evaluate << evaluatesfir[t][i] << ",";
-				ofs_first_evaluate << evaluatesfir_tmp[i] << ",";
-			}
-			ofs_first_evaluate << std::endl;
-			for(int i = 1; i < 33; i++)
-			{
-				//ofs_second_evaluate << evaluatessec[t][i] << ",";
-				ofs_second_evaluate << evaluatessec_tmp[i] << ",";
-			}
-			ofs_second_evaluate << std::endl;
-			for(int i = 0; i < 64; i++)
-			{
-				//ofs_record << record[t][i] << ",";
-				ofs_record << record_tmp[i] << ",";
-			}
-			ofs_record << std::endl;	
-		}
-		else if(t <= 5250)
-		{
-			if(t % sparse == 1 || t == N || sparse == 1)
-			cout << "Game #" << t << endl;
-			Game game(&p1, &p2, display, {{1, 1}});
-			enum Color r = game.game();
-			cnt[r]++;
-			if(t % sparse == 0 || t == N)
-			{
-				cout << "Black : " << cnt[Color::Black] << endl;
-				cout << "White : " << cnt[Color::White] << endl;
-				cout << " Draw : " << cnt[Color::Draw] << endl;
-			}
-			for(int i = 1; i < 33; i++)
-			{
-				//ofs_first_evaluate << evaluatesfir[t][i] << ",";
-				ofs_first_evaluate << evaluatesfir_tmp[i] << ",";
-			}
-			ofs_first_evaluate << std::endl;
-			for(int i = 1; i < 33; i++)
-			{
-				//ofs_second_evaluate << evaluatessec[t][i] << ",";
-				ofs_second_evaluate << evaluatessec_tmp[i] << ",";
-			}
-			ofs_second_evaluate << std::endl;
-			for(int i = 0; i < 64; i++)
-			{
-				//ofs_record << record[t][i] << ",";
-				ofs_record << record_tmp[i] << ",";
-			}
-			ofs_record << std::endl;	
-		}
-		else if(t <= 5500)
-		{
-			if(t % sparse == 1 || t == N || sparse == 1)
-			cout << "Game #" << t << endl;
-			Game game(&p1, &p2, display, {{1, 0}});
-			enum Color r = game.game();
-			cnt[r]++;
-			if(t % sparse == 0 || t == N)
-			{
-				cout << "Black : " << cnt[Color::Black] << endl;
-				cout << "White : " << cnt[Color::White] << endl;
-				cout << " Draw : " << cnt[Color::Draw] << endl;
-			}
-			for(int i = 1; i < 33; i++)
-			{
-				//ofs_first_evaluate << evaluatesfir[t][i] << ",";
-				ofs_first_evaluate << evaluatesfir_tmp[i] << ",";
-			}
-			ofs_first_evaluate << std::endl;
-			for(int i = 1; i < 33; i++)
-			{
-				//ofs_second_evaluate << evaluatessec[t][i] << ",";
-				ofs_second_evaluate << evaluatessec_tmp[i] << ",";
-			}
-			ofs_second_evaluate << std::endl;
-			for(int i = 0; i < 64; i++)
-			{
-				//ofs_record << record[t][i] << ",";
-				ofs_record << record_tmp[i] << ",";
-			}
-			ofs_record << std::endl;	
-		}
-	}*/
 	return 0;
 	//std::string output_csv_file_path = "/yonmoku/parameter2.csv";
 	//std::ofstream ofs_csv_file(output_csv_file_path );
@@ -1526,19 +1404,19 @@ int main()
 		for(int i = 1; i < 33; i++)
 		{
 			//ofs_first_evaluate << evaluatesfir[t][i] << ",";
-			ofs_first_evaluate << evaluatesfir_tmp[i] << ",";
+			ofs_first_evaluate << game.evaluatesfir_tmp[i] << ",";
 		}
 		ofs_first_evaluate << std::endl;
 		for(int i = 1; i < 33; i++)
 		{
 			//ofs_second_evaluate << evaluatessec[t][i] << ",";
-			ofs_second_evaluate << evaluatessec_tmp[i] << ",";
+			ofs_second_evaluate << game.evaluatessec_tmp[i] << ",";
 		}
 		ofs_second_evaluate << std::endl;
 		for(int i = 0; i < 64; i++)
 		{
 			//ofs_record << record[t][i] << ",";
-			ofs_record << record_tmp[i] << ",";
+			ofs_record << game.record_tmp[i] << ",";
 		}
 		ofs_record << std::endl;
 	}
