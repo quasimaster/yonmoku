@@ -16,8 +16,8 @@
 
 using namespace std;
 
-// mt19937 rng(random_device{}());
-mt19937 rng;
+mt19937 rng(random_device{}());
+// mt19937 rng;
 enum Cell{None, Me, You};
 enum State{Continue, End, Invalid};
 enum Color{Draw, Black, White};
@@ -903,20 +903,20 @@ int main()
 
 		int sum = 0;
 		static const int stdweight[36] = {
-			0,-157,-63,-21,0,27,70,367,0,
-			0,-158,-87,-24,0,32,95,111,0,
-			0,-57,-88,-9,0,29,59,-76,0,
-			0,-29,-88,-23,0,-13,28,-50,0
+			0,0,-55,-20,0,25,63,0,0,
+			0,0,-85,-23,0,31,91,0,0,
+			0,0,-87,-8,0,30,61,0,0,
+			0,0,-92,-20,0,-13,36,0,0
 		};
 		auto count = board.count();
 		const int turn_bucket = (turn - 4) / 14;
 		for (int v : count) sum += stdweight[turn_bucket * 9 + v + 4];//0~4,5~14,...,45~54 
 
 		static const int maketweight[32] = {
-			292,-26,52,11,37,-17,33,7,
-			128,-44,77,25,95,-32,41,11,
-			391,19,158,77,150,22,65,51,
-			983,-47,250,91,406,92,112,56
+			-53,-18,46,9,13,-25,29,9,
+			126,-40,76,24,79,-35,39,11,
+			376,5,156,75,159,25,66,51,
+			1087,-85,259,74,153,111,117,64
 		};
 
 		for(int i = 0; i < LINES_NUM; i++)
@@ -1011,20 +1011,20 @@ int main()
 		}
 		int sum = 0;
 		static const int weight[36] = {
-			0,-195,-70,-20,0,34,81,279,0,
-			0,-186,-76,-26,0,30,112,179,0,
-			0,15,40,-12,0,26,101,36,0,
-			0,64,-13,23,0,26,117,15,0
+			0,0,-58,-18,0,29,72,0,0,
+			0,0,-65,-26,0,27,106,0,0,
+			0,0,-42,-14,0,27,104,0,0,
+			0,0,-15,15,0,23,116,0,0
 		};
 		
 		auto count = board.count();
 		const int turn_bucket = (turn - 5) / 14;
 		for (int v : count) sum += weight[turn_bucket * 9 + v + 4];//1~3,4~13,...,44~53
 		static const int maketweight[32] = {
-			18,-50,29,-22,151,17,55,36,
-			61,-39,39,5,139,-35,79,42,
-			178,20,68,53,377,29,163,92,
-			269,29,84,31,1228,-1,261,88
+			-13,-45,22,-21,138,16,54,35,
+			51,-31,35,2,135,-17,78,41,
+			178,20,67,52,377,26,166,92,
+			215,35,93,47,1342,2,268,86
 		};
 
 		static const unsigned long long mask_1 = 0x000000000000ffffuLL;
@@ -1116,7 +1116,7 @@ int main()
 			return 0;
 		}
 		rMe &= ~(rYou << SIZE * SIZE);
-		static const int parameter[4] = {748,876,612,253};
+		static const int parameter[4] = {635,883,615,253};
 		//assert(turn < 64);
 		return __builtin_popcountll(rMe & rMe << SIZE * SIZE) * parameter[(turn - 4) / 14];
 	};
@@ -1127,7 +1127,7 @@ int main()
 			return 0;
 		}
 		rMe &= ~(rYou << SIZE * SIZE);
-		static const int parameter[4] = {2376,940,644,449};
+		static const int parameter[4] = {3504,955,639,451};
 		return __builtin_popcountll(rMe & rMe << SIZE * SIZE) * parameter[(turn - 5) / 14];
 	};
 	auto reach_layer_intersection = [&](const Board &board, const enum Color now, unsigned long long rMe, unsigned long long rYou, const unsigned long long hand) -> int
@@ -1165,17 +1165,16 @@ int main()
 		}
 
         static const int weightfir[40] = {
-			-228,164,-243,52,76,13,27,-1211,61,731,
-            82,495,41,133,222,82,355,45,-1370,-196,
-            250,907,211,226,520,209,549,58,1229,998,
-            218,1403,209,331,896,286,1013,312,1967,117
+			97,515,108,157,202,150,332,-1168,-343,1270,
+            169,587,149,265,358,229,304,172,-481,-309,
+            147,813,129,311,589,270,383,390,763,450,
+            155,1339,163,412,985,334,938,608,1074,-877
         };
         static const int weightsec[40] = {
-            -93,-34,-106,22,377,-5,504,-255,886,127,
-            149,255,83,16,366,-27,234,125,-402,-18,
-            262,606,235,202,832,147,473,266,1116,263,
-            378,1126,353,213,1318,192,979,537,1581,-796
-
+            108,222,164,176,540,166,397,-279,-778,-1385,
+            270,402,247,167,517,143,223,153,514,-628,
+            312,653,278,180,821,135,416,395,886,150,
+            425,1181,372,115,1252,111,869,766,1343,926
         };
 
 		if (now == Color::Black)
