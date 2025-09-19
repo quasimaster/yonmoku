@@ -682,7 +682,8 @@ struct AIPlayer : Player
 				//int ev = -evaluate_board(b,turn>=46?14:turn>=39?9:level - 1, -INF , -mx + 1);
 				//int ev = -evaluate_board(b,turn>=44?16::level - 1, -INF , -mx + 1);//教師データ用ver3
                 //int ev = -evaluate_board(b,turn>=43?17:turn>=35?9:level - 1, -INF , -mx + 1);//教師データ用ver4,シグモイド関数の係数は920
-				int ev = -evaluate_board(b,turn>=40?21:turn>=33?11:turn>=25?9:level - 1, -INF , -mx + 1);//教師データ用ver5,シグモイド関数の係数は1840
+				// int ev = -evaluate_board(b,turn>=40?21:turn>=33?11:turn>=25?9:level - 1, -INF , -mx + 1);//教師データ用ver5,シグモイド関数の係数は1840
+				int ev = -evaluate_board(b,turn>=39?22:turn>=31?11:turn>=23?9:level - 1, -INF , -mx + 1);//教師データ用ver6,シグモイド関数の係数は1840
                 //int ev = -evaluate_board(b, turn>=39?21:turn>=37?12:turn>=29?10:level - 1, -INF , -mx + 1);//この行で途中からの読み手数を変更できる
 				//int ev = -evaluate_board(b, turn>=39?21:turn>35?13:turn>=29?11:level - 1, -INF , -mx + 1);//この行で途中からの読み手数を変更できる
 				// int ev = -evaluate_board(b, turn>=39?22:turn>=33?13:turn>=21?11:level - 1, -INF , -mx + 1);//この行で途中からの読み手数を変更できる
@@ -903,20 +904,20 @@ int main()
 
 		int sum = 0;
 		static const int stdweight[36] = {
-			0,0,-55,-20,0,25,63,0,0,
-			0,0,-85,-23,0,31,91,0,0,
-			0,0,-87,-8,0,30,61,0,0,
-			0,0,-92,-20,0,-13,36,0,0
+			0,0,-59,-21,0,27,58,0,0,
+			0,0,-83,-23,0,30,89,0,0,
+			0,0,-80,-15,0,20,63,0,0,
+			0,0,-88,-37,0,-17,47,0,0
 		};
 		auto count = board.count();
 		const int turn_bucket = (turn - 4) / 14;
 		for (int v : count) sum += stdweight[turn_bucket * 9 + v + 4];//0~4,5~14,...,45~54 
 
 		static const int maketweight[32] = {
-			-53,-18,46,9,13,-25,29,9,
-			126,-40,76,24,79,-35,39,11,
-			376,5,156,75,159,25,66,51,
-			1087,-85,259,74,153,111,117,64
+			6,-1,54,10,-14,-32,26,6,
+			219,-32,84,25,99,-41,45,25,
+			349,-33,164,85,167,30,65,62,
+			1162,-94,254,136,269,62,92,21
 		};
 
 		for(int i = 0; i < LINES_NUM; i++)
@@ -1011,20 +1012,20 @@ int main()
 		}
 		int sum = 0;
 		static const int weight[36] = {
-			0,0,-58,-18,0,29,72,0,0,
-			0,0,-65,-26,0,27,106,0,0,
-			0,0,-42,-14,0,27,104,0,0,
-			0,0,-15,15,0,23,116,0,0
+			0,0,-49,-21,0,25,65,0,0,
+			0,0,-69,-24,0,26,105,0,0,
+			0,0,-36,-2,0,23,89,0,0,
+			0,0,-26,23,0,42,113,0,0
 		};
 		
 		auto count = board.count();
 		const int turn_bucket = (turn - 5) / 14;
 		for (int v : count) sum += weight[turn_bucket * 9 + v + 4];//1~3,4~13,...,44~53
 		static const int maketweight[32] = {
-			-13,-45,22,-21,138,16,54,35,
-			51,-31,35,2,135,-17,78,41,
-			178,20,67,52,377,26,166,92,
-			215,35,93,47,1342,2,268,86
+			-20,-48,23,-3,115,12,48,24,
+			74,-39,39,13,163,-40,85,41,
+			104,21,71,61,361,-12,180,102,
+			196,-48,57,-12,1097,-78,259,130
 		};
 
 		static const unsigned long long mask_1 = 0x000000000000ffffuLL;
@@ -1116,7 +1117,7 @@ int main()
 			return 0;
 		}
 		rMe &= ~(rYou << SIZE * SIZE);
-		static const int parameter[4] = {635,883,615,253};
+		static const int parameter[4] = {1115,1008,647,414};
 		//assert(turn < 64);
 		return __builtin_popcountll(rMe & rMe << SIZE * SIZE) * parameter[(turn - 4) / 14];
 	};
@@ -1127,7 +1128,7 @@ int main()
 			return 0;
 		}
 		rMe &= ~(rYou << SIZE * SIZE);
-		static const int parameter[4] = {3504,955,639,451};
+		static const int parameter[4] = {1628,1032,643,461};
 		return __builtin_popcountll(rMe & rMe << SIZE * SIZE) * parameter[(turn - 5) / 14];
 	};
 	auto reach_layer_intersection = [&](const Board &board, const enum Color now, unsigned long long rMe, unsigned long long rYou, const unsigned long long hand) -> int
@@ -1165,16 +1166,16 @@ int main()
 		}
 
         static const int weightfir[40] = {
-			97,515,108,157,202,150,332,-1168,-343,1270,
-            169,587,149,265,358,229,304,172,-481,-309,
-            147,813,129,311,589,270,383,390,763,450,
-            155,1339,163,412,985,334,938,608,1074,-877
+			120,478,120,182,254,184,115,920,-994,-705,
+            170,568,156,290,361,245,286,439,1115,880,
+            171,803,162,312,597,251,432,407,552,1263,
+            205,1354,192,404,934,308,992,476,1188,-318
         };
         static const int weightsec[40] = {
-            108,222,164,176,540,166,397,-279,-778,-1385,
-            270,402,247,167,517,143,223,153,514,-628,
-            312,653,278,180,821,135,416,395,886,150,
-            425,1181,372,115,1252,111,869,766,1343,926
+            181,238,177,138,453,139,255,-13,481,-354,
+            295,405,258,171,536,159,254,318,522,977,
+            264,667,231,157,837,148,499,388,866,1367,
+            444,1094,341,183,1236,151,932,685,1175,869
         };
 
 		if (now == Color::Black)
@@ -1257,17 +1258,17 @@ int main()
 	};
 
 	HumanPlayer H;
-	AIPlayer p1(12, evaluate_pointfir_cont_layer_intersection);
-	AIPlayer p2(12, evaluate_pointsec_cont_layer_intersection);
+	AIPlayer p1(10, evaluate_pointfir_cont_layer_intersection);
+	AIPlayer p2(10, evaluate_pointsec_cont_layer_intersection);
 	AIPlayer p3(6, evaluate_random);//全ランダム
 	AIPlayer p4(6, evaluate_random);//全ランダム
 	// p1.set_random(10);
 	// p2.set_random(10);//一部ランダム
-	Game game(&p1, &p2, true, {});//ゲーム設定
+	Game game(&H, &p2, true, {});//ゲーム設定
 	p1.set_game(&game);
 	p2.set_game(&game);
-	game.game();//連続で試合をする場合はここをコメントアウトする
-	return 0;//連続で試合をする場合はここをコメントアウトする
+	// game.game();//連続で試合をする場合はここをコメントアウトする
+	// return 0;//連続で試合をする場合はここをコメントアウトする
 	int cnt[3] = {};
 	static const int N = 4096;//<=100000 4096 8192
 
@@ -1282,7 +1283,7 @@ int main()
 	std::ofstream ofs_record(output_record);
 
 	cout << "max_threads : " <<  omp_get_max_threads() << endl;
-	int setting = 2;//使用するスレッド数
+	int setting = 12;//使用するスレッド数
 	omp_set_num_threads(setting);
 
 	
@@ -1296,9 +1297,9 @@ int main()
 	std::ofstream ofs_records[setting];
 
 	for(int i = 0; i < setting; i++){
-		output_first[i] = "/yonmoku/esc/first_evaluate_ver5_esc_thread" + std::to_string(i) + ".csv";
-		output_second[i] = "/yonmoku/esc/second_evaluate_ver5_esc_thread" + std::to_string(i) + ".csv";
-		output_records[i] = "/yonmoku/esc/record_ver5_esc_thread" + std::to_string(i) + ".csv";
+		output_first[i] = "/yonmoku/esc/first_evaluate_ver6_esc_thread" + std::to_string(i) + ".csv";
+		output_second[i] = "/yonmoku/esc/second_evaluate_ver6_esc_thread" + std::to_string(i) + ".csv";
+		output_records[i] = "/yonmoku/esc/record_ver6_esc_thread" + std::to_string(i) + ".csv";
 	}
 	for(int i = 0; i < setting; i++){
 		ofs_first[i].open(output_first[i]);
@@ -1313,7 +1314,7 @@ int main()
 		gameNum[i] = 0;
 	}
 
-	# pragma omp parallel private(rng, rng_thread_num)
+	# pragma omp parallel private(rng)
 	{
 		for(int t = 0; t < N; t++)
 		{
@@ -1340,7 +1341,7 @@ int main()
 				cout << gameNum[i] << ",";
 			}
 			cout << "times game have finished" << endl;
-			cout << (cnt[Color::Black] + cnt[Color::White] + cnt[Color::Draw]) / (double)(N * setting) << " % has finished" << endl;
+			cout << (cnt[Color::Black] + cnt[Color::White] + cnt[Color::Draw]) * 100 / (double)(N * setting) << " % has finished" << endl;
 			for(int i = 1; i < 33; i++)
 			{
 				ofs_first[thread] << game.evaluatesfir_tmp[i] << ",";
