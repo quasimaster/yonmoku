@@ -683,10 +683,10 @@ struct AIPlayer : Player
 				//int ev = -evaluate_board(b,turn>=44?16::level - 1, -INF , -mx + 1);//教師データ用ver3
                 //int ev = -evaluate_board(b,turn>=43?17:turn>=35?9:level - 1, -INF , -mx + 1);//教師データ用ver4,シグモイド関数の係数は920
 				// int ev = -evaluate_board(b,turn>=40?21:turn>=33?11:turn>=25?9:level - 1, -INF , -mx + 1);//教師データ用ver5,シグモイド関数の係数は1840
-				int ev = -evaluate_board(b,turn>=39?22:turn>=31?11:turn>=23?9:level - 1, -INF , -mx + 1);//教師データ用ver6,シグモイド関数の係数は1840
+				// int ev = -evaluate_board(b,turn>=39?22:turn>=31?11:turn>=23?9:level - 1, -INF , -mx + 1);//教師データ用ver6,シグモイド関数の係数は1840
                 //int ev = -evaluate_board(b, turn>=39?21:turn>=37?12:turn>=29?10:level - 1, -INF , -mx + 1);//この行で途中からの読み手数を変更できる
 				//int ev = -evaluate_board(b, turn>=39?21:turn>35?13:turn>=29?11:level - 1, -INF , -mx + 1);//この行で途中からの読み手数を変更できる
-				// int ev = -evaluate_board(b, turn>=39?22:turn>=33?13:turn>=21?11:level - 1, -INF , -mx + 1);//この行で途中からの読み手数を変更できる
+				int ev = -evaluate_board(b, turn>=39?22:turn>=33?13:turn>=21?11:level - 1, -INF , -mx + 1);//この行で途中からの読み手数を変更できる
 				if (mx < ev) mv = 0uLL, mx = ev;
 				if (mx == ev) mv |= bit;
 				//h ^= bit;
@@ -903,21 +903,24 @@ int main()
 		}
 
 		int sum = 0;
-		static const int stdweight[36] = {
-			0,0,-59,-21,0,27,58,0,0,
-			0,0,-83,-23,0,30,89,0,0,
-			0,0,-80,-15,0,20,63,0,0,
-			0,0,-88,-37,0,-17,47,0,0
+		static const int stdweight[28] = {
+			0,-57,-19,0,27,56,0,
+			0,-74,-21,0,27,83,0,
+			0,-82,-9,0,23,60,0,
+			0,-96,-38,0,-16,48,
 		};
 		auto count = board.count();
 		const int turn_bucket = (turn - 4) / 14;
-		for (int v : count) sum += stdweight[turn_bucket * 9 + v + 4];//0~4,5~14,...,45~54 
+		for (int v : count){
+			assert(v >= -3 && v <= 3);
+			sum += stdweight[turn_bucket * 7 + v + 3];//0~4,5~14,...,45~54 
+		}
 
 		static const int maketweight[32] = {
-			6,-1,54,10,-14,-32,26,6,
-			219,-32,84,25,99,-41,45,25,
-			349,-33,164,85,167,30,65,62,
-			1162,-94,254,136,269,62,92,21
+			11,-15,47,0,50,-71,30,16,
+			185,-35,87,29,103,-71,47,27,
+			480,14,163,84,173,2,73,35,
+			863,-25,264,131,483,16,82,32
 		};
 
 		for(int i = 0; i < LINES_NUM; i++)
@@ -1011,21 +1014,24 @@ int main()
 			return 0;
 		}
 		int sum = 0;
-		static const int weight[36] = {
-			0,0,-49,-21,0,25,65,0,0,
-			0,0,-69,-24,0,26,105,0,0,
-			0,0,-36,-2,0,23,89,0,0,
-			0,0,-26,23,0,42,113,0,0
+		static const int weight[28] = {
+			0,-46,-21,0,26,65,0,
+			0,-71,-23,0,31,102,0,
+			0,-35,-7,0,21,96,0,
+			0,-17,20,0,39,110,0
 		};
 		
 		auto count = board.count();
 		const int turn_bucket = (turn - 5) / 14;
-		for (int v : count) sum += weight[turn_bucket * 9 + v + 4];//1~3,4~13,...,44~53
+		for (int v : count){
+			assert(v >= -3 && v <= 3);
+			sum += weight[turn_bucket * 7 + v + 3];//1~3,4~13,...,44~53
+		} 
 		static const int maketweight[32] = {
-			-20,-48,23,-3,115,12,48,24,
-			74,-39,39,13,163,-40,85,41,
-			104,21,71,61,361,-12,180,102,
-			196,-48,57,-12,1097,-78,259,130
+			-6,-98,27,1,119,15,49,23,
+			93,-63,42,13,132,-47,84,42,
+			202,-9,72,26,505,41,180,106,
+			440,-37,58,24,1175,51,290,133
 		};
 
 		static const unsigned long long mask_1 = 0x000000000000ffffuLL;
@@ -1117,7 +1123,7 @@ int main()
 			return 0;
 		}
 		rMe &= ~(rYou << SIZE * SIZE);
-		static const int parameter[4] = {1115,1008,647,414};
+		static const int parameter[4] = {868,1052,621,471};
 		//assert(turn < 64);
 		return __builtin_popcountll(rMe & rMe << SIZE * SIZE) * parameter[(turn - 4) / 14];
 	};
@@ -1128,7 +1134,7 @@ int main()
 			return 0;
 		}
 		rMe &= ~(rYou << SIZE * SIZE);
-		static const int parameter[4] = {1628,1032,643,461};
+		static const int parameter[4] = {1169,1071,617,506};
 		return __builtin_popcountll(rMe & rMe << SIZE * SIZE) * parameter[(turn - 5) / 14];
 	};
 	auto reach_layer_intersection = [&](const Board &board, const enum Color now, unsigned long long rMe, unsigned long long rYou, const unsigned long long hand) -> int
@@ -1166,16 +1172,16 @@ int main()
 		}
 
         static const int weightfir[40] = {
-			120,478,120,182,254,184,115,920,-994,-705,
-            170,568,156,290,361,245,286,439,1115,880,
-            171,803,162,312,597,251,432,407,552,1263,
-            205,1354,192,404,934,308,992,476,1188,-318
+			127,417,100,200,140,184,375,-864,-609,1332,
+            164,547,165,276,339,229,320,158,-1184,-171,
+            168,816,155,318,595,251,456,374,1019,-771,
+            173,1383,184,429,950,312,1016,555,1111,-1282
         };
         static const int weightsec[40] = {
-            181,238,177,138,453,139,255,-13,481,-354,
-            295,405,258,171,536,159,254,318,522,977,
-            264,667,231,157,837,148,499,388,866,1367,
-            444,1094,341,183,1236,151,932,685,1175,869
+            204,132,173,151,404,149,355,1327,-1226,160,
+            300,381,245,184,522,181,263,407,741,279,
+            280,670,237,164,847,142,523,357,1073,-1017,
+            444,1138,335,123,1245,133,959,692,1007,-708
         };
 
 		if (now == Color::Black)
@@ -1267,8 +1273,8 @@ int main()
 	Game game(&H, &p2, true, {});//ゲーム設定
 	p1.set_game(&game);
 	p2.set_game(&game);
-	// game.game();//連続で試合をする場合はここをコメントアウトする
-	// return 0;//連続で試合をする場合はここをコメントアウトする
+	game.game();//連続で試合をする場合はここをコメントアウトする
+	return 0;//連続で試合をする場合はここをコメントアウトする
 	int cnt[3] = {};
 	static const int N = 4096;//<=100000 4096 8192
 
