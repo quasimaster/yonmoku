@@ -1031,10 +1031,10 @@ int main()
 
 		int sum = 0;
 		static const int stdweight[36] = {
-			0,0,-1,-10,0,100,1000,0,0,
-			0,0,-1,-10,0,100,1000,0,0,
-			0,0,-1,-10,0,100,1000,0,0,
-			0,0,-1,-10,0,100,1000,0,0
+			1153,221,448,8,0,-161,1417,-128,-564,
+			306,561,207,196,0,-325,103,-58,-1023,
+			-11,855,-135,109,0,-29,30,61,1437,
+			477,-184,-96,695,0,-30,-288,-574,456
 		};
 		
 		const int turn_bucket = (turn - 4) / 14;
@@ -1050,10 +1050,10 @@ int main()
 			}
 			
 		}
-		sum += stdweight[turn_bucket * 9 + 1] * 
-				__builtin_popcountll(imageReachMe & ((imageReachMe | imageReachYou) << SIZE * SIZE | mask_1));//自分の玉が3個の時の基礎点の計算
 		sum += stdweight[turn_bucket * 9 + 7] * 
-				__builtin_popcountll(imageReachYou & ((imageReachMe | imageReachYou) << SIZE * SIZE | mask_1));//自分の玉が3個の時の基礎点の計算
+				__builtin_popcountll(imageReachMe & ((imageMe | imageYou) << SIZE * SIZE | mask_1));//自分の玉が3個の時の基礎点の計算
+		sum += stdweight[turn_bucket * 9 + 1] * 
+				__builtin_popcountll(imageReachYou & ((imageMe | imageYou) << SIZE * SIZE | mask_1));//相手の玉が3個の時の基礎点の計算
 		// for (int v : count) {
 		// 	sum += stdweight[turn_bucket * 9 + v + 4];//玉が1,2個の時の基礎点の計算
 
@@ -1067,10 +1067,10 @@ int main()
 		// 	1087,-85,259,74,153,111,117,64
 		// };
 		static const int maketweight[32] = {
-			0,0,0,0,0,0,0,0,
-			0,0,0,0,0,0,0,0,
-			0,0,0,0,0,0,0,0,
-			0,0,0,0,0,0,0,0
+			1189,1179,1247,1046,514,614,-992,-644,
+			-505,-1183,-572,612,-100,905,384,899,
+			179,88,1191,1107,63,1152,-50,-725,
+			-384,-785,-1296,-965,137,-186,585,656
 		};
 
 		{//makeT点の評価値計算
@@ -1167,10 +1167,10 @@ int main()
 			}
 			
 		}
-		sum += stdweight[turn_bucket * 9 + 1] * 
-				__builtin_popcountll(imageReachMe & ((imageReachMe | imageReachYou) << SIZE * SIZE | mask_1));//自分の玉が3個の時の基礎点の計算
 		sum += stdweight[turn_bucket * 9 + 7] * 
-				__builtin_popcountll(imageReachYou & ((imageReachMe | imageReachYou) << SIZE * SIZE | mask_1));//自分の玉が3個の時の基礎点の計算
+				__builtin_popcountll(imageReachMe & ((imageMe | imageYou) << SIZE * SIZE | mask_1));//自分の玉が3個の時の基礎点の計算
+		sum += stdweight[turn_bucket * 9 + 1] * 
+				__builtin_popcountll(imageReachYou & ((imageMe | imageYou) << SIZE * SIZE | mask_1));//相手の玉が3個の時の基礎点の計算
 		
 		static const int maketweight[32] = {
 			-13,-45,22,-21,138,16,54,35,
@@ -1217,7 +1217,7 @@ int main()
 		imageReachMe = imageReachMe_esc;
 		imageReachYou = imageReachYou_esc;
 
-		static const int parameter[4] = {635,883,615,253};
+		static const int parameter[4] = {1010,771,-340,775};
 		//assert(turn < 64);
 		return __builtin_popcountll(imageReachMe & imageReachMe << SIZE * SIZE) * parameter[(turn - 4) / 14];
 	};
@@ -1296,7 +1296,12 @@ int main()
         //     147,813,129,311,589,270,383,390,763,450,
         //     155,1339,163,412,985,334,938,608,1074,-877
         // };
-		static const int weightfir[40] = {};
+		static const int weightfir[40] = {
+			-965,-708,-292,-171,905,1235,-856,490,-204,981,
+			-246,-625,-615,-558,-1230,-918,-391,-829,888,-582,
+			429,-529,-1193,-633,-1086,-570,834,1215,938,947,
+			-78,-1258,-75,764,1171,-1203,509,-245,-230,-20
+		};
 
         static const int weightsec[40] = {
             108,222,164,176,540,166,397,-279,-778,-1385,
@@ -1450,7 +1455,7 @@ int main()
 	};
 
 	HumanPlayer H;
-	AIPlayer p1(1, evaluate_pointfir_cont_layer_intersection);
+	AIPlayer p1(10, evaluate_pointfir_cont_layer_intersection);
 	AIPlayer p2(10, evaluate_pointsec_cont_layer_intersection);
 	AIPlayer p3(6, evaluate_random);//全ランダム
 	AIPlayer p4(6, evaluate_random);//全ランダム
