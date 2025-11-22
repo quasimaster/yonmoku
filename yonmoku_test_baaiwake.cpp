@@ -683,10 +683,10 @@ struct AIPlayer : Player
 				//int ev = -evaluate_board(b,turn>=44?16::level - 1, -INF , -mx + 1);//教師データ用ver3
                 //int ev = -evaluate_board(b,turn>=43?17:turn>=35?9:level - 1, -INF , -mx + 1);//教師データ用ver4,シグモイド関数の係数は920
 				// int ev = -evaluate_board(b,turn>=40?21:turn>=33?11:turn>=25?9:level - 1, -INF , -mx + 1);//教師データ用ver5,シグモイド関数の係数は1840
-				// int ev = -evaluate_board(b,turn>=39?22:turn>=31?11:turn>=23?9:level - 1, -INF , -mx + 1);//教師データ用ver6,シグモイド関数の係数は1840
+				int ev = -evaluate_board(b,turn>=39?22:turn>=31?11:turn>=23?9:level - 1, -INF , -mx + 1);//教師データ用ver6,シグモイド関数の係数は1840
                 //int ev = -evaluate_board(b, turn>=39?21:turn>=37?12:turn>=29?10:level - 1, -INF , -mx + 1);//この行で途中からの読み手数を変更できる
 				//int ev = -evaluate_board(b, turn>=39?21:turn>35?13:turn>=29?11:level - 1, -INF , -mx + 1);//この行で途中からの読み手数を変更できる
-				int ev = -evaluate_board(b, turn>=39?22:turn>=33?13:turn>=21?11:level - 1, -INF , -mx + 1);//この行で途中からの読み手数を変更できる
+				// int ev = -evaluate_board(b, turn>=39?22:turn>=33?13:turn>=21?11:level - 1, -INF , -mx + 1);//この行で途中からの読み手数を変更できる
 				if (mx < ev) mv = 0uLL, mx = ev;
 				if (mx == ev) mv |= bit;
 				//h ^= bit;
@@ -904,10 +904,10 @@ int main()
 
 		int sum = 0;
 		static const int stdweight[28] = {
-			0,-57,-19,0,27,56,0,
-			0,-74,-21,0,27,83,0,
-			0,-82,-9,0,23,60,0,
-			0,-96,-38,0,-16,48,
+			0,-60,-22,0,28,61,0,
+			0,-83,-26,0,31,92,0,
+			0,-87,-15,0,28,56,0,
+			0,-109,-37,0,-5,30,0
 		};
 		auto count = board.count();
 		const int turn_bucket = (turn - 4) / 14;
@@ -917,10 +917,17 @@ int main()
 		}
 
 		static const int maketweight[32] = {
-			11,-15,47,0,50,-71,30,16,
-			185,-35,87,29,103,-71,47,27,
-			480,14,163,84,173,2,73,35,
-			863,-25,264,131,483,16,82,32
+			-38,-32,52,2,48,-45,32,15,
+			158,-54,85,19,80,-45,38,11,
+			422,1,143,76,119,10,50,46,
+			1009,-90,184,82,165,-26,23,111
+		};
+
+		static const int float_maketweight[24] = {
+			252,241,72,17,42,22,
+			10,294,161,-54,62,47,
+			81,488,239,6,109,12,
+			105,1002,594,87,113,-39
 		};
 
 		for(int i = 0; i < LINES_NUM; i++)
@@ -933,35 +940,21 @@ int main()
 				static const unsigned long long mask_3 = 0x0000ffff00000000uLL;
 				static const unsigned long long mask_4 = 0xffff000000000000uLL;
 				unsigned long long floatthree = two & mask_3 & ~((rYou | board.Me | board.You) << SIZE * SIZE);//twoのうち、浮き3段目決勝点の候補
-				/*while(floatthree)
+				while(floatthree)
 				{
 					unsigned long long h = floatthree & -floatthree;
-					unsigned long long make = two & ~h;//makeT点						
-					sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_1) * maketweight[((turn + 1) / 9)*8 + 0];
-					sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_2) * maketweight[((turn + 1) / 9)*8 + 1];
-					sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_3) * maketweight[((turn + 1) / 9)*8 + 2];
-					sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_4) * maketweight[((turn + 1) / 9)*8 + 3];
+					unsigned long long make = two & ~h;//makeT点
+					unsigned long long nonfloat_make = make & ~((board.Me | board.You) << SIZE * SIZE);//浮いてないmakeT点
+					unsigned long long float_make = make & ~nonfloat_make;//浮いているmakeT点					
+					sum += __builtin_popcountll(nonfloat_make & ~(rYou >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket * 8 + 0];
+					sum += __builtin_popcountll(nonfloat_make & ~(rYou >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket * 8 + 1];
+					sum += __builtin_popcountll(nonfloat_make & ~(rYou >> SIZE*SIZE) & mask_3) * maketweight[turn_bucket * 8 + 2];
+					sum += __builtin_popcountll(nonfloat_make & ~(rYou >> SIZE*SIZE) & mask_4) * maketweight[turn_bucket * 8 + 3];
+
+					sum += __builtin_popcountll(float_make & ~(rYou >> SIZE*SIZE) & mask_2) * float_maketweight[turn_bucket * 6 + 0];//two
+					sum += __builtin_popcountll(float_make & ~(rYou >> SIZE*SIZE) & mask_3) * float_maketweight[turn_bucket * 6 + 1];//three
+					sum += __builtin_popcountll(float_make & ~(rYou >> SIZE*SIZE) & mask_4) * float_maketweight[turn_bucket * 6 + 2];//four
 					floatthree ^= h;
-				}*/
-				if(floatthree)
-				{
-					unsigned long long h = floatthree & -floatthree;
-					unsigned long long make = two & ~h;//makeT点						
-					sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket * 8 + 0];
-					sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket * 8 + 1];
-					sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_3) * maketweight[turn_bucket * 8 + 2];
-					sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_4) * maketweight[turn_bucket * 8 + 3];
-					floatthree ^= h;
-					if(floatthree)
-					{
-						//unsigned long long h = floatthree & -floatthree;
-						// unsigned long long make = two & ~floatthree;//makeT点						
-						// sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket * 8 + 0];
-						// sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket * 8 + 1];
-						sum += __builtin_popcountll(h & ~(rYou >> SIZE*SIZE)) * maketweight[turn_bucket * 8 + 2];
-						// sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_4) * maketweight[turn_bucket * 8 + 3];
-						//floatthree ^= h;
-					}
 				}
 			}
 			else if(count[i] == -2)
@@ -972,36 +965,23 @@ int main()
 				static const unsigned long long mask_3 = 0x0000ffff00000000uLL;
 				static const unsigned long long mask_4 = 0xffff000000000000uLL;
 				unsigned long long floatthree = two & mask_3 & ~((rMe | board.Me | board.You) << SIZE * SIZE);
-				/*while(floatthree)
+				while(floatthree)
 				{
 					unsigned long long h = floatthree & -floatthree;
 					unsigned long long make = two & ~h;
-					sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_1) * maketweight[((turn + 1) / 9)*8 + 4];
-					sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_2) * maketweight[((turn + 1) / 9)*8 + 5];
-					sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_3) * maketweight[((turn + 1) / 9)*8 + 6];
-					sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_4) * maketweight[((turn + 1) / 9)*8 + 7];
+					unsigned long long nonfloat_make = make & ~((board.Me | board.You) << SIZE * SIZE);//浮いてないmakeT点
+					unsigned long long float_make = make & ~nonfloat_make;//浮いているmakeT点
+					sum -= __builtin_popcountll(nonfloat_make & ~(rMe >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket *8 + 4];
+					sum -= __builtin_popcountll(nonfloat_make & ~(rMe >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket *8 + 5];
+					sum -= __builtin_popcountll(nonfloat_make & ~(rMe >> SIZE*SIZE) & mask_3) * maketweight[turn_bucket *8 + 6];
+					sum -= __builtin_popcountll(nonfloat_make & ~(rMe >> SIZE*SIZE) & mask_4) * maketweight[turn_bucket *8 + 7];
+
+					sum -= __builtin_popcountll(float_make & ~(rYou >> SIZE*SIZE) & mask_2) * float_maketweight[turn_bucket * 6 + 3];//two
+					sum -= __builtin_popcountll(float_make & ~(rYou >> SIZE*SIZE) & mask_3) * float_maketweight[turn_bucket * 6 + 4];//three
+					sum -= __builtin_popcountll(float_make & ~(rYou >> SIZE*SIZE) & mask_4) * float_maketweight[turn_bucket * 6 + 5];//four
 					floatthree ^= h;
-				}*/
-				if(floatthree)
-				{
-					unsigned long long h = floatthree & -floatthree;
-					unsigned long long make = two & ~h;
-					sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket * 8 + 4];
-					sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket * 8 + 5];
-					sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_3) * maketweight[turn_bucket * 8 + 6];
-					sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_4) * maketweight[turn_bucket * 8 + 7];
-					floatthree ^= h;
-					if(floatthree)
-					{
-						//unsigned long long h = floatthree & -floatthree;
-						// unsigned long long make = two & ~floatthree;
-						// sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket * 8 + 4];
-						// sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket * 8 + 5];
-						sum -= __builtin_popcountll(h & ~(rMe >> SIZE*SIZE)) * maketweight[turn_bucket * 8 + 6];
-						// sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_4) * maketweight[turn_bucket * 8 + 7];
-						//floatthree ^= h;
-					}
 				}
+				
 			}
 		}
         return sum;
@@ -1015,10 +995,10 @@ int main()
 		}
 		int sum = 0;
 		static const int weight[28] = {
-			0,-46,-21,0,26,65,0,
-			0,-71,-23,0,31,102,0,
-			0,-35,-7,0,21,96,0,
-			0,-17,20,0,39,110,0
+			0,-50,-21,0,25,66,0,
+			0,-70,-23,0,29,103,0,
+			0,-40,-8,0,26,88,0,
+			0,-38,14,0,34,110,0
 		};
 		
 		auto count = board.count();
@@ -1028,10 +1008,17 @@ int main()
 			sum += weight[turn_bucket * 7 + v + 3];//1~3,4~13,...,44~53
 		} 
 		static const int maketweight[32] = {
-			-6,-98,27,1,119,15,49,23,
-			93,-63,42,13,132,-47,84,42,
-			202,-9,72,26,505,41,180,106,
-			440,-37,58,24,1175,51,290,133
+			46,-57,25,5,90,-6,49,13,
+			40,-46,33,1,141,-40,82,36,
+			121,10,50,20,414,1,152,99,
+			17,-109,-9,-25,1049,-80,169,136
+		};
+
+		static const int float_maketweight[24]{
+			21,73,9,69,137,67,
+			-35,99,52,-19,184,93,
+			10,239,120,64,295,71,
+			45,355,227,-61,321,-10
 		};
 
 		static const unsigned long long mask_1 = 0x000000000000ffffuLL;
@@ -1044,70 +1031,43 @@ int main()
 			{
 				unsigned long long two = ~board.Me & LINES[i];//LINE内の玉が入っていない部分
 				unsigned long long floatthree = two & mask_3 & ~((rYou | board.Me | board.You) << SIZE * SIZE);//twoのうち、浮き3段目決勝点の候補
-				/*while(floatthree)
+				while(floatthree)
 				{
 					unsigned long long h = floatthree & -floatthree;
-					unsigned long long make = two & ~h;//makeT点						
-					sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket * 8 + 0];
-					sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket * 8 + 1];
-					sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_3) * maketweight[turn_bucket * 8 + 2];
-					sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_4) * maketweight[turn_bucket * 8 + 3];
+					unsigned long long make = two & ~h;//makeT点
+					unsigned long long nonfloat_make = make & ~((board.Me | board.You) << SIZE * SIZE);//浮いてないmakeT点
+					unsigned long long float_make = make & ~nonfloat_make;//浮いているmakeT点	
+					sum += __builtin_popcountll(nonfloat_make & ~(rYou >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket * 8 + 0];
+					sum += __builtin_popcountll(nonfloat_make & ~(rYou >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket * 8 + 1];
+					sum += __builtin_popcountll(nonfloat_make & ~(rYou >> SIZE*SIZE) & mask_3) * maketweight[turn_bucket * 8 + 2];
+					sum += __builtin_popcountll(nonfloat_make & ~(rYou >> SIZE*SIZE) & mask_4) * maketweight[turn_bucket * 8 + 3];
+
+					sum += __builtin_popcountll(float_make & ~(rYou >> SIZE*SIZE) & mask_2) * float_maketweight[turn_bucket * 6 + 0];//two
+					sum += __builtin_popcountll(float_make & ~(rYou >> SIZE*SIZE) & mask_3) * float_maketweight[turn_bucket * 6 + 1];//three
+					sum += __builtin_popcountll(float_make & ~(rYou >> SIZE*SIZE) & mask_4) * float_maketweight[turn_bucket * 6 + 2];//four
 					floatthree ^= h;
-				}*/
-				if(floatthree)
-				{
-					unsigned long long h = floatthree & -floatthree;
-					unsigned long long make = two & ~h;//makeT点						
-					sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket * 8 + 0];
-					sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket * 8 + 1];
-					sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_3) * maketweight[turn_bucket * 8 + 2];
-					sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_4) * maketweight[turn_bucket * 8 + 3];
-					floatthree ^= h;
-					if(floatthree)
-					{
-						// unsigned long long make = two & ~floatthree;//makeT点						
-						// sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket * 8 + 0];
-						// sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket * 8 + 1];
-						sum += __builtin_popcountll(h & ~(rYou >> SIZE*SIZE)) * maketweight[turn_bucket * 8 + 2];
-						// sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_4) * maketweight[turn_bucket * 8 + 3];
-						//floatthree ^= h;
-					}
 				}
 			}
 			else if(count[i] == -2)
 			{
 				unsigned long long two = ~board.You & LINES[i];
 				unsigned long long floatthree = two & mask_3 & ~((rMe | board.Me | board.You) << SIZE * SIZE);
-				/*while(floatthree)
+				while(floatthree)
 				{
 					unsigned long long h = floatthree & -floatthree;
 					unsigned long long make = two & ~h;
-					sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket * 8 + 4];
-					sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket * 8 + 5];
-					sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_3) * maketweight[turn_bucket * 8 + 6];
-					sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_4) * maketweight[turn_bucket * 8 + 7];
+					unsigned long long nonfloat_make = make & ~((board.Me | board.You) << SIZE * SIZE);//浮いてないmakeT点
+					unsigned long long float_make = make & ~nonfloat_make;//浮いているmakeT点
+					sum -= __builtin_popcountll(nonfloat_make & ~(rMe >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket * 8 + 4];
+					sum -= __builtin_popcountll(nonfloat_make & ~(rMe >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket * 8 + 5];
+					sum -= __builtin_popcountll(nonfloat_make & ~(rMe >> SIZE*SIZE) & mask_3) * maketweight[turn_bucket * 8 + 6];
+					sum -= __builtin_popcountll(nonfloat_make & ~(rMe >> SIZE*SIZE) & mask_4) * maketweight[turn_bucket * 8 + 7];
+
+					sum -= __builtin_popcountll(float_make & ~(rYou >> SIZE*SIZE) & mask_2) * float_maketweight[turn_bucket * 6 + 3];//two
+					sum -= __builtin_popcountll(float_make & ~(rYou >> SIZE*SIZE) & mask_3) * float_maketweight[turn_bucket * 6 + 4];//three
+					sum -= __builtin_popcountll(float_make & ~(rYou >> SIZE*SIZE) & mask_4) * float_maketweight[turn_bucket * 6 + 5];//four
 					floatthree ^= h;
-				}*/
-				if(floatthree)
-				{
-					unsigned long long h = floatthree & -floatthree;
-					unsigned long long make = two & ~h;
-					sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket * 8 + 4];
-					sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket * 8 + 5];
-					sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_3) * maketweight[turn_bucket * 8 + 6];
-					sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_4) * maketweight[turn_bucket * 8 + 7];
-					floatthree ^= h;
-					if(floatthree)
-					{
-						// unsigned long long make = two & ~floatthree;
-						// sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket * 8 + 4];
-						// sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket * 8 + 5];
-						sum -= __builtin_popcountll(h & ~(rMe >> SIZE*SIZE)) * maketweight[turn_bucket * 8 + 6];
-						// sum -= __builtin_popcountll(make & ~(rMe >> SIZE*SIZE) & mask_4) * maketweight[turn_bucket * 8 + 7];
-						//floatthree ^= h;
-					}
 				}
-				
 			}
 		}
         return sum;
@@ -1123,7 +1083,7 @@ int main()
 			return 0;
 		}
 		rMe &= ~(rYou << SIZE * SIZE);
-		static const int parameter[4] = {868,1052,621,471};
+		static const int parameter[4] = {2359,982,674,406};
 		//assert(turn < 64);
 		return __builtin_popcountll(rMe & rMe << SIZE * SIZE) * parameter[(turn - 4) / 14];
 	};
@@ -1134,7 +1094,7 @@ int main()
 			return 0;
 		}
 		rMe &= ~(rYou << SIZE * SIZE);
-		static const int parameter[4] = {1169,1071,617,506};
+		static const int parameter[4] = {1203,990,660,408};
 		return __builtin_popcountll(rMe & rMe << SIZE * SIZE) * parameter[(turn - 5) / 14];
 	};
 	auto reach_layer_intersection = [&](const Board &board, const enum Color now, unsigned long long rMe, unsigned long long rYou, const unsigned long long hand) -> int
@@ -1172,16 +1132,16 @@ int main()
 		}
 
         static const int weightfir[40] = {
-			127,417,100,200,140,184,375,-864,-609,1332,
-            164,547,165,276,339,229,320,158,-1184,-171,
-            168,816,155,318,595,251,456,374,1019,-771,
-            173,1383,184,429,950,312,1016,555,1111,-1282
+			121,465,142,178,234,186,348,-513,659,1249,
+            175,591,169,304,382,239,350,245,-454,569,
+            177,820,154,328,624,250,444,318,760,-1109,
+            191,1463,180,398,1076,309,1048,481,1766,-732
         };
         static const int weightsec[40] = {
-            204,132,173,151,404,149,355,1327,-1226,160,
-            300,381,245,184,522,181,263,407,741,279,
-            280,670,237,164,847,142,523,357,1073,-1017,
-            444,1138,335,123,1245,133,959,692,1007,-708
+            179,203,185,136,436,147,289,-1033,343,440,
+            313,401,248,189,545,183,288,220,1506,813,
+            293,671,240,152,845,151,498,322,1027,312,
+            448,1155,361,135,1290,136,941,613,1123,1050
         };
 
 		if (now == Color::Black)
@@ -1270,7 +1230,7 @@ int main()
 	AIPlayer p4(6, evaluate_random);//全ランダム
 	// p1.set_random(10);
 	// p2.set_random(10);//一部ランダム
-	Game game(&H, &p2, true, {});//ゲーム設定
+	Game game(&p1, &H, true, {{0,0}});//ゲーム設定
 	p1.set_game(&game);
 	p2.set_game(&game);
 	game.game();//連続で試合をする場合はここをコメントアウトする
@@ -1280,16 +1240,16 @@ int main()
 
 	//return 0;
 	
-	std::string output_first_evaluate = "/yonmoku/first_evaluate_ver5_esc.csv";
-	std::string output_second_evaluate = "/yonmoku/second_evaluate_ver5_esc.csv";
-	std::string output_record= "/yonmoku/record_ver5_esc.csv";
+	// std::string output_first_evaluate = "/yonmoku/first_evaluate_ver5_esc.csv";
+	// std::string output_second_evaluate = "/yonmoku/second_evaluate_ver5_esc.csv";
+	// std::string output_record= "/yonmoku/record_ver5_esc.csv";
 
-	std::ofstream ofs_first_evaluate(output_first_evaluate);
-	std::ofstream ofs_second_evaluate(output_second_evaluate);
-	std::ofstream ofs_record(output_record);
+	// std::ofstream ofs_first_evaluate(output_first_evaluate);
+	// std::ofstream ofs_second_evaluate(output_second_evaluate);
+	// std::ofstream ofs_record(output_record);
 
 	cout << "max_threads : " <<  omp_get_max_threads() << endl;
-	int setting = 12;//使用するスレッド数
+	int setting = 8;//使用するスレッド数
 	omp_set_num_threads(setting);
 
 	
@@ -1367,67 +1327,67 @@ int main()
 		}
 	}
 	return 0;
-	for(int t = 0; t < N; t++)
-	{
-		//if(t % sparse == 1 || t == N || sparse == 1)
-		{
-			cout << "Game #" << t << endl;
-		}
-		Game game(&p1, &p2, display, {{start[t % 4], start[(t / 4) % 4]}, {start[(t / 16) % 4], start[(t / 64) % 4]}, 
-										{start[(t / 256) % 4], start[(t / 1024) % 4]}});
-		enum Color r = game.game();
-		cnt[r]++;
-		//if(t % sparse == 0 || t == N)
-		{
-			cout << "Black : " << cnt[Color::Black] << endl;
-			cout << "White : " << cnt[Color::White] << endl;
-			cout << " Draw : " << cnt[Color::Draw] << endl;
-		}
-		for(int i = 1; i < 33; i++)
-		{
-			//ofs_first_evaluate << evaluatesfir[t][i] << ",";
-			ofs_first_evaluate << game.evaluatesfir_tmp[i] << ",";
-		}
-		ofs_first_evaluate << std::endl;
-		for(int i = 1; i < 33; i++)
-		{
-			//ofs_second_evaluate << evaluatessec[t][i] << ",";
-			ofs_second_evaluate << game.evaluatessec_tmp[i] << ",";
-		}
-		ofs_second_evaluate << std::endl;
-		for(int i = 0; i < 64; i++)
-		{
-			//ofs_record << record[t][i] << ",";
-			ofs_record << game.record_tmp[i] << ",";
-		}
-		ofs_record << std::endl;
-	}
+	// for(int t = 0; t < N; t++)
+	// {
+	// 	//if(t % sparse == 1 || t == N || sparse == 1)
+	// 	{
+	// 		cout << "Game #" << t << endl;
+	// 	}
+	// 	Game game(&p1, &p2, display, {{start[t % 4], start[(t / 4) % 4]}, {start[(t / 16) % 4], start[(t / 64) % 4]}, 
+	// 									{start[(t / 256) % 4], start[(t / 1024) % 4]}});
+	// 	enum Color r = game.game();
+	// 	cnt[r]++;
+	// 	//if(t % sparse == 0 || t == N)
+	// 	{
+	// 		cout << "Black : " << cnt[Color::Black] << endl;
+	// 		cout << "White : " << cnt[Color::White] << endl;
+	// 		cout << " Draw : " << cnt[Color::Draw] << endl;
+	// 	}
+	// 	for(int i = 1; i < 33; i++)
+	// 	{
+	// 		//ofs_first_evaluate << evaluatesfir[t][i] << ",";
+	// 		ofs_first_evaluate << game.evaluatesfir_tmp[i] << ",";
+	// 	}
+	// 	ofs_first_evaluate << std::endl;
+	// 	for(int i = 1; i < 33; i++)
+	// 	{
+	// 		//ofs_second_evaluate << evaluatessec[t][i] << ",";
+	// 		ofs_second_evaluate << game.evaluatessec_tmp[i] << ",";
+	// 	}
+	// 	ofs_second_evaluate << std::endl;
+	// 	for(int i = 0; i < 64; i++)
+	// 	{
+	// 		//ofs_record << record[t][i] << ",";
+	// 		ofs_record << game.record_tmp[i] << ",";
+	// 	}
+	// 	ofs_record << std::endl;
+	// }
 
-	return 0;
-	//std::string output_csv_file_path = "/yonmoku/parameter2.csv";
-	//std::ofstream ofs_csv_file(output_csv_file_path );
+	// return 0;
+	// //std::string output_csv_file_path = "/yonmoku/parameter2.csv";
+	// //std::ofstream ofs_csv_file(output_csv_file_path );
 
-	for(int t = 1; t <= N; t++)
-	{
-		for(int i = 1; i < 33; i++)
-		{
-			//ofs_first_evaluate << evaluatesfir[t][i] << ",";
-			ofs_first_evaluate << game.evaluatesfir_tmp[i] << ",";
-		}
-		ofs_first_evaluate << std::endl;
-		for(int i = 1; i < 33; i++)
-		{
-			//ofs_second_evaluate << evaluatessec[t][i] << ",";
-			ofs_second_evaluate << game.evaluatessec_tmp[i] << ",";
-		}
-		ofs_second_evaluate << std::endl;
-		for(int i = 0; i < 64; i++)
-		{
-			//ofs_record << record[t][i] << ",";
-			ofs_record << game.record_tmp[i] << ",";
-		}
-		ofs_record << std::endl;
-	}
+	// for(int t = 1; t <= N; t++)
+	// {
+	// 	for(int i = 1; i < 33; i++)
+	// 	{
+	// 		//ofs_first_evaluate << evaluatesfir[t][i] << ",";
+	// 		ofs_first_evaluate << game.evaluatesfir_tmp[i] << ",";
+	// 	}
+	// 	ofs_first_evaluate << std::endl;
+	// 	for(int i = 1; i < 33; i++)
+	// 	{
+	// 		//ofs_second_evaluate << evaluatessec[t][i] << ",";
+	// 		ofs_second_evaluate << game.evaluatessec_tmp[i] << ",";
+	// 	}
+	// 	ofs_second_evaluate << std::endl;
+	// 	for(int i = 0; i < 64; i++)
+	// 	{
+	// 		//ofs_record << record[t][i] << ",";
+	// 		ofs_record << game.record_tmp[i] << ",";
+	// 	}
+	// 	ofs_record << std::endl;
+	// }
 
 	return 0;
 }
