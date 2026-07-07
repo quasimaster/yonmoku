@@ -1,4 +1,6 @@
-#define NDEBUG          // ← すべての #include より前(assert 無効化)
+#ifndef USE_ASSERT
+#define NDEBUG          // ← すべての #include より前(assert 無効化。-DUSE_ASSERT で有効化)
+#endif
 # include <omp.h>
 
 #include "common.hpp"
@@ -6,21 +8,23 @@
 #include "player.hpp"
 #include "game.hpp"
 
-// 提案5(PVS)版ハーネス。基準は main_alpha_killer.cpp(副基準 main_alpha_tt_leaf_array.cpp)
-//   g++ -std=c++17 -O2 -fopenmp code/main_alpha_pvs.cpp -o yonmoku_alpha_pvs
-// ノード数計測: -DBENCH / PVS 無効(提案4相当): -DUSE_PVS=0
+// 提案7a(turn 集約)版ハーネス。基準は main_alpha_pvs.cpp(提案5まで実装済み)。
+// AI は AIPlayerPVS を無変更で流用し、評価関数のみ _rt 版に差し替える
+// (implementation-plan-eval-speedup.md §3.1、基準を提案1+2+3版→提案5版に読み替え)。
+//   g++ -std=c++17 -O2 -fopenmp code/main_alpha_pvs_eval_t.cpp -o yonmoku_alpha_pvs_eval_t
+// ノード数計測: -DBENCH
 
 #include "tt.hpp"
 #include "ai_player_pvs.hpp"
-#include "evaluate_alpha_leaf.hpp"
+#include "evaluate_alpha_t.hpp"
 using AI = AIPlayerPVS<int(*)(const Board&, unsigned long long, unsigned long long, unsigned long long)>;
 
 int main()
 {
 	init_lines();
 
-	AI p1(10, evaluate_pointfir_cont_layer_intersection_r);
-	AI p2(10, evaluate_pointsec_cont_layer_intersection_r);
+	AI p1(10, evaluate_pointfir_cont_layer_intersection_rt);
+	AI p2(10, evaluate_pointsec_cont_layer_intersection_rt);
 
 	auto st = chrono::system_clock::now();
 	Game game(&p1, &p2, true, {{3,3}});  // 検証時は {} を基準版の hands 出力の先頭 n 手に差し替える(§5.1)
