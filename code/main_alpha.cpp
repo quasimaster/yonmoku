@@ -13,16 +13,19 @@ int main()
 	init_lines();
 
 	HumanPlayer H;
-	AIPlayer p1(8, evaluate_pointfir_cont_layer_intersection);
-	AIPlayer p2(8, evaluate_pointsec_cont_layer_intersection);
+	AIPlayer p1(10, evaluate_pointfir_cont_layer_intersection);
+	AIPlayer p2(10, evaluate_pointsec_cont_layer_intersection);
 	AIPlayer p3(6, evaluate_random);//全ランダム
 	AIPlayer p4(6, evaluate_random);//全ランダム
 	// p1.set_random(10);
 	// p2.set_random(10);//一部ランダム
-	Game game(&H, &p2, true, {{0,0}, {3,3}, {3,0},{0,3},{0,0},{3,3}});//ゲーム設定
+	Game game(&p1, &p2, true, {});//ゲーム設定
 	p1.set_game(&game);
 	p2.set_game(&game);
+	auto st = chrono::system_clock::now();
 	game.game();//連続で試合をする場合はここをコメントアウトする
+	auto msec = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now() - st);
+	cout << "total: " << msec.count() / 1e3 << " sec" << endl;
 	return 0;//連続で試合をする場合はここをコメントアウトする
 	int cnt[3] = {};
 	static const int N = 4096;//<=100000 4096 8192

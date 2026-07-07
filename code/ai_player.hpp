@@ -218,6 +218,7 @@ struct AIPlayer : Player
                 //int ev = -evaluate_board(b,turn>=43?17:turn>=35?9:level - 1, -INF , -mx + 1);//教師データ用ver4,シグモイド関数の係数は920
 				// int ev = -evaluate_board(b,turn>=40?21:turn>=33?11:turn>=25?9:level - 1, -INF , -mx + 1);//教師データ用ver5,シグモイド関数の係数は1840
 				int ev = -evaluate_board(b,turn>=39?22:turn>=31?11:turn>=23?9:level - 1, -INF , -mx + 1);//教師データ用ver6,シグモイド関数の係数は1840
+				// int ev = -evaluate_board(b,turn>=37?24:turn>=29?11:turn>=21?9:level - 1, -INF , -mx + 1);//教師データ用ver7,シグモイド関数の係数は1840
                 //int ev = -evaluate_board(b, turn>=39?21:turn>=37?12:turn>=29?10:level - 1, -INF , -mx + 1);//この行で途中からの読み手数を変更できる
 				//int ev = -evaluate_board(b, turn>=39?21:turn>35?13:turn>=29?11:level - 1, -INF , -mx + 1);//この行で途中からの読み手数を変更できる
 				// int ev = -evaluate_board(b, turn>=39?22:turn>=33?13:turn>=21?11:level - 1, -INF , -mx + 1);//この行で途中からの読み手数を変更できる
