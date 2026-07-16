@@ -8,17 +8,17 @@
 #include "player.hpp"
 #include "game.hpp"
 
-// 提案7a+7b+7c 統合版ハーネス。母体は main_alpha_pvs_eval_inc.cpp(7c)。
-// BoardInc の増分 cnt[] を添字に 7b 型の単一テーブルを引く評価関数(_rit)を使う。
-// 評価は BMI2 非依存(pext 不要)。基準は main_alpha_pvs.cpp(提案5まで)。
-//   g++ -std=c++17 -O2 -fopenmp code/main_alpha_pvs_eval_inc_tbl.cpp -o yonmoku_alpha_pvs_eval_inc_tbl
+// 提案1後半(反復深化)版ハーネス。母体は main_alpha_pvs_eval_inc_tbl.cpp(7a+7b+7c 統合版)。
+// AI を AIPlayerPVSIncID(root 反復深化)に差し替えただけで、評価・盤面・TT は流用元と同一。
+//   g++ -std=c++17 -O2 -fopenmp            code/main_alpha_pvs_eval_inc_tbl_id.cpp -o yonmoku_alpha_id
+//   g++ -std=c++17 -O2 -fopenmp -DUSE_ID=0 code/main_alpha_pvs_eval_inc_tbl_id.cpp -o yonmoku_alpha_base  (現行相当)
 // ノード数計測: -DBENCH / cnt 検証 assert 有効化: -DUSE_ASSERT
 
 #include "tt.hpp"
 #include "board_inc.hpp"
-#include "ai_player_pvs_inc.hpp"          // 無変更で流用
+#include "ai_player_pvs_inc_id.hpp"       // ★反復深化版(USE_ID で有/無切替)
 #include "evaluate_alpha_inc_tbl.hpp"     // ★7c → 統合版へ
-using AI = AIPlayerPVSInc<int(*)(const BoardInc&, unsigned long long, unsigned long long, unsigned long long)>;
+using AI = AIPlayerPVSIncID<int(*)(const BoardInc&, unsigned long long, unsigned long long, unsigned long long)>;
 
 int main()
 {

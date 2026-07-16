@@ -26,15 +26,23 @@
 #define USE_PVS 1
 #endif
 
-// 提案7c(ライン充填数の増分更新)版。ai_player_pvs.hpp の AIPlayerPVS のコピーで、
-// 探索内部の盤面を Board → BoardInc に機械的に置換したもの(implementation-plan-eval-speedup.md §3.3)。
-//   - evaluate_board は const BoardInc& を取り、place_fast_clone は BoardInc 版(充填数を増分更新)
-//   - Board::win / Board::reach / TT の hash は既存のまま board.b を渡す
-//   - move() 冒頭で一度だけ BoardInc::from(board) に変換し、以降の探索は BoardInc 系で行う
-//   - Game/Player インタフェース・root の3手読み ordering・TT・強制手処理は既存構造のまま
+// 提案1後半 A/B 用: 1(デフォルト)なら root 反復深化、
+// 0 なら現行の1回きり探索(= ai_player_pvs_inc.hpp と同一挙動)
+// (実装計画書 implementation-plan-iterative-deepening.md §1.4)
+#ifndef USE_ID
+#define USE_ID 1
+#endif
+
+// 提案1後半(反復深化)版。ai_player_pvs_inc.hpp の AIPlayerPVSInc のコピーで、
+// struct を AIPlayerPVSIncID に改名し、root(move())にのみ反復深化を実装したもの。
+//   - evaluate_board(内部ノード)/ update_cut / メンバは流用元と完全同一(無変更)
+//   - move() は「読み手数 N = 4, 6, …, level を 2 手ずつ深める」反復深化に置換
+//     (§1.3: 評価関数の偶数手読み前提を厳守。evaluate_board 深さ d = N-1)
+//   - 反復間で tt.new_search() を呼ばず、浅い反復の TT を深い反復が再利用(§1.2)
+//   - USE_ID=0 で現行 ai_player_pvs_inc.hpp と完全同一挙動になる
 // 評価関数 F は int(*)(const BoardInc&, ull, ull, ull)(evaluate_alpha_inc.hpp の _ri 版)
 template<typename F>
-struct AIPlayerPVSInc : Player
+struct AIPlayerPVSIncID : Player
 {
 	using Player::verbose;
 	using Player::random;
@@ -45,7 +53,7 @@ struct AIPlayerPVSInc : Player
 	static const int MAX_PLY = 64;
 	unsigned char killer[MAX_PLY][2];   // βカットを起こした手(マス番号)。未設定 = TT_NO_MOVE
 	int history[64];                    // history[sq] += level * level(1 << 28 で飽和)
-	AIPlayerPVSInc(int level, F evaluate_func, int tt_bits = 22) : level(level), evaluate_func(evaluate_func), tt(tt_bits) { assert(level >= 1); }
+	AIPlayerPVSIncID(int level, F evaluate_func, int tt_bits = 22) : level(level), evaluate_func(evaluate_func), tt(tt_bits) { assert(level >= 1); }
 
 	void set_game(Game* g) { game = g; }
 
@@ -309,6 +317,73 @@ struct AIPlayerPVSInc : Player
 		// ★7c: root で一度だけ Board → BoardInc 変換(以降の探索は BoardInc 系)
 		const BoardInc bi = BoardInc::from(board);
 
+#if USE_ID
+		// ---- 反復深化(root-only)----------------------------------------------
+		// ★最終読み深さは原本 main と同一の turn 依存式にする(evaluate_board へ渡す深さ d)。
+		//   総読み手数 N = d + 1。turn>=39 の d=22 は N=23(奇数手読み)になる点に注意(§1.3 caveat)。
+		//   終盤は葉が終端局面(勝敗確定)で評価関数を経由しないため実用上は成立するが、
+		//   奇数手読みは評価視点前提から外れる。偶数手読みを厳守したい場合は d_target を偶数にすること。
+		const int d_target = turn>=39?23:turn>=31?11:turn>=23?9:level - 1;   // 原本 depth 式と同一
+
+		// root 手を固定長配列に収集(強制手絞り込み後の hand。合法手は最大16)。
+		// 初期順は静的 move_order のグループ順(現行 dynamic 収集と同じ走査順)。
+		array<pair<int, unsigned long long>, 16> roots;   // (score, bit)。score は直近反復の評価値
+		int n = 0;
+		for (const unsigned long long mask : move_order)
+		{
+			unsigned long long h = hand & mask;
+			while (h)
+			{
+				const unsigned long long bit = h & -h;
+				roots[n++] = make_pair(0, bit);
+				h ^= bit;
+			}
+		}
+
+		// 深さ d を 2 手ずつ深化し、最終反復で必ず d_target に着地させる。
+		// 開始 d は d_target とパリティを合わせる(通常は d=3=旧4手読み。d_target が偶数なら d=4 から)。
+		// これにより浅い反復の TT ウォームアップを効かせつつ、最終 d を原本と一致させる。
+		int d_start = (((d_target - 3) & 1) == 0) ? 3 : 4;
+		if (d_start > d_target) d_start = d_target;
+		for (int d = d_start; d <= d_target; d += 2)
+		{
+			mx = -INF;
+			mv = 0uLL;
+			for (int i = 0; i < n; i++)
+			{
+				const unsigned long long bit = roots[i].second;
+				BoardInc b = bi.place_fast_clone(bit);
+				enum State r = Board::win(b.b.You);
+
+				assert(r == State::Continue);
+				int ev;
+#if USE_PVS
+				if (mx == -INF)
+				{
+					ev = -evaluate_board(b, d, -INF, -mx + 1, 0);       // 最初の手: 現行と同じ窓
+				}
+				else
+				{
+					ev = -evaluate_board(b, d, -mx - 1, -mx + 1, 0);    // 親窓 (mx-1, mx+1) の null window
+					if (ev >= mx + 1)
+						ev = -evaluate_board(b, d, -INF, -mx, 0);       // fail high → 親窓 (mx, INF) で確定
+				}
+#else
+				ev = -evaluate_board(b, d, -INF, -mx + 1, 0);           // 提案4版と同一
+#endif
+				roots[i].first = ev;                                    // 次反復の並べ替えキー
+				if (mx < ev) mv = 0uLL, mx = ev;
+				if (mx == ev) mv |= bit;
+			}
+			// 次の(深い)反復を最善手優先にする。stable_sort で同点手の相対順(=静的 move_order)を維持。
+			// score 同点時に bit 値で比較しないよう、キーを score のみに限定するラムダ比較を用いる(§3.3-2)。
+			stable_sort(roots.begin(), roots.begin() + n,
+			            [](const pair<int, unsigned long long>& a, const pair<int, unsigned long long>& b)
+			            { return a.first > b.first; });
+		}
+		// ループ後、最終反復(N == N_target = level)の mx / mv がそのまま採用される。
+		// ----------------------------------------------------------------------
+#else
 		//4手読みパート(root は1手番に1回のみでコスト無視できるため現行のまま。提案4 §1.1)
 		array<pair<int, unsigned long long>, 16> dynamic;   // 提案3: vector → スタック固定長(合法手は最大16)
 		int n = 0;                                          // 提案3: 要素数
@@ -337,7 +412,7 @@ struct AIPlayerPVSInc : Player
 			enum State r = Board::win(b.b.You);
 
 			assert(r == State::Continue);
-			const int depth = turn>=39?23:turn>=31?11:turn>=23?9:level - 1;//教師データ用ver6,シグモイド関数の係数は1840
+			const int depth = turn>=39?22:turn>=31?11:turn>=23?9:level - 1;//教師データ用ver6,シグモイド関数の係数は1840
 			// const int depth = level - 1;
 			int ev;
 #if USE_PVS
@@ -358,6 +433,7 @@ struct AIPlayerPVSInc : Player
 			if (mx < ev) mv = 0uLL, mx = ev;
 			if (mx == ev) mv |= bit;
 		}
+#endif
 
 		enum Color now = board.validate();
 		if(turn % 2 == 0)
