@@ -27,7 +27,7 @@ int main()
 	AI p2(10, evaluate_pointsec_cont_layer_intersection_rt);
 
 	auto st = chrono::system_clock::now();
-	Game game(&p1, &p2, true, {{3,3}});  // 検証時は {} を基準版の hands 出力の先頭 n 手に差し替える(§5.1)
+	Game game(&p1, &p2, true, {});  // 検証時は {} を基準版の hands 出力の先頭 n 手に差し替える(§5.1)
 	p1.set_game(&game);
 	p2.set_game(&game);
 	game.game();

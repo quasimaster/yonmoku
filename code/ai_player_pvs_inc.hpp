@@ -337,7 +337,8 @@ struct AIPlayerPVSInc : Player
 			enum State r = Board::win(b.b.You);
 
 			assert(r == State::Continue);
-			const int depth = turn>=39?22:turn>=31?11:turn>=23?9:level - 1;//教師データ用ver6,シグモイド関数の係数は1840
+			// const int depth = turn>=39?22:turn>=31?11:turn>=23?9:level - 1;//教師データ用ver6,シグモイド関数の係数は1840
+			const int depth = level - 1;//教師データ用ver6,シグモイド関数の係数は1840
 			int ev;
 #if USE_PVS
 			if (mx == -INF)
