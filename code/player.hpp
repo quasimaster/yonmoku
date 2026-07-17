@@ -29,11 +29,14 @@ struct Player
 		return make_pair(X(v), Y(v));
 	}
 	virtual pair<int, int> move(Board board) = 0;
+	virtual bool is_human() const { return false; }   // 既定は非人間(AI・自己対戦は override しない)
 
 };
 
 struct HumanPlayer : Player
 {
+	bool is_human() const override { return true; }
+
 	pair<int, int> move(Board board) override
 	{
 		enum Color now = board.validate();
@@ -42,9 +45,15 @@ struct HumanPlayer : Player
 		cout << "Input x y: place ";
 		if (now == Color::Black) cout << "\033[31mX\033[m";
 		else cout << "O";
-		cout << " to (x, y)\t(1 <= x, y <= 4)"<<endl;
+		cout << " to (x, y)\t(1 <= x, y <= 4)  [enter an out-of-range coord to undo]"<<endl;
 		int x, y;
-		cin >> x >> y;
-		return make_pair(x - 1, y - 1);
+		if (!(cin >> x >> y))            // 数値以外 / EOF 等の入力失敗 → undo 扱い
+		{
+			cin.clear();
+			string dummy; cin >> dummy;  // 不正トークンを 1 つ読み捨て
+			return UNDO_MOVE;
+		}
+		if (x < 1 || x > 4 || y < 1 || y > 4) return UNDO_MOVE;   // 範囲外 → undo
+		return make_pair(x - 1, y - 1);                            // 通常手
 	}
 };

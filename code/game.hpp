@@ -42,6 +42,7 @@ struct Game
 				Player* current_player = (turn % 2 == 0) ? player1 : player2;
 				xy = current_player -> move(board);
 			}
+			if (xy == UNDO_MOVE) return State::Undo;   // undo 要求。盤面・hand には一切コミットしない
 			ret = board.place(xy.first, xy.second);
 			if (ret == State::Invalid)
 			{
@@ -63,13 +64,47 @@ struct Game
 		return ret;
 	}
 
+	// hand[i] を打った担当プレイヤー(定跡手 i < start.size() には使わない)
+	Player* player_at(int i) const { return (i % 2 == 0) ? player1 : player2; }
+
+	// undo: 末尾の「相手(非人間)手」を全て + 続く「人間手」1 つを取り消し、盤面を再生する。
+	// 呼び出し時点で不変条件 hand.size() == turn が成立している。戻せなければ turn を据え置く。
+	int rewind(int turn)
+	{
+		const int floor = (int)start.size();   // 定跡手は戻さない下限
+		int j = (int)hand.size();              // == turn
+
+		while (j > floor && !player_at(j - 1)->is_human()) j--;   // 末尾の非人間(相手)手を読み飛ばす
+
+		if (!(j > floor && player_at(j - 1)->is_human()))   // 取り消せる自分(人間)の手が無い
+		{
+			cout << "No move to undo" << endl;
+			return turn;             // no-op(局面不変。同じ手番を再度促す)
+		}
+		const int k = j - 1;   // その人間手 + それ以降の相手手 をまとめて取り消した後の手数
+
+		hand.resize(k);              // 履歴を切り詰め
+		board = Board();             // 空盤から
+		for (int i = 0; i < k; i++)  // 残りを再生(常に合法手なので余計な表示は出ない)
+			board.place(hand[i].first, hand[i].second);
+		if (verbose)
+		{
+			cout << "-- undo: rewound from move " << turn << " to move " << k << " --" << endl;
+			board.print();
+		}
+		return k;                    // 新しい turn(= 打ち直す手番)
+	}
+
 	enum Color game()
 	{
-		enum State ret;
-		for (int turn = 0; turn < BOARD_SIZE; turn++)
+		enum State ret = State::Continue;
+		int turn = 0;
+		while (turn < BOARD_SIZE)
 		{
 			ret = move(turn);
+			if (ret == State::Undo) { turn = rewind(turn); continue; }   // 巻き戻してその手番を打ち直す
 			if (ret == State::End) break;
+			turn++;
 		}
 		board.print();
 		enum Color result;

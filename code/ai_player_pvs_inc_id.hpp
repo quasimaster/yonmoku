@@ -323,7 +323,8 @@ struct AIPlayerPVSIncID : Player
 		//   総読み手数 N = d + 1。turn>=39 の d=22 は N=23(奇数手読み)になる点に注意(§1.3 caveat)。
 		//   終盤は葉が終端局面(勝敗確定)で評価関数を経由しないため実用上は成立するが、
 		//   奇数手読みは評価視点前提から外れる。偶数手読みを厳守したい場合は d_target を偶数にすること。
-		const int d_target = turn>=39?23:turn>=31?11:turn>=23?9:level - 1;   // 原本 depth 式と同一
+		// const int d_target = turn>=39?23:turn>=31?11:turn>=23?9:level - 1;//教師データ用ver6,シグモイド関数の係数は1840
+		const int d_target = turn>=37?25:turn>=29?11:turn>=21?9:level - 1;//教師データ用ver7,シグモイド関数の係数は1840
 
 		// root 手を固定長配列に収集(強制手絞り込み後の hand。合法手は最大16)。
 		// 初期順は静的 move_order のグループ順(現行 dynamic 収集と同じ走査順)。

@@ -13,6 +13,7 @@
 #include<string>
 #include<fstream>
 #include<sstream>
+#include<climits>
 # include <stdio.h>
 
 using namespace std;
@@ -20,8 +21,11 @@ using namespace std;
 // inline mt19937 rng(random_device{}());
 inline mt19937 rng;
 enum Cell{None, Me, You};
-enum State{Continue, End, Invalid};
+enum State{Continue, End, Invalid, Undo};   // Undo: 人間手番での「一手戻る」要求(値追加は既存経路に無影響)
 enum Color{Draw, Black, White};
+
+// undo 要求を表す番兵座標。合法手は正規化後 {0..3, 0..3} なので、この値と衝突しない。
+const pair<int, int> UNDO_MOVE = {INT_MIN, INT_MIN};
 
 const int SIZE = 4;
 #define IDX(x, y, z) ((x) + (y) * SIZE + (z) * SIZE * SIZE)
