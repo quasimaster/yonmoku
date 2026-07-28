@@ -12,7 +12,13 @@ struct Player
 	void set_random(int random_) {random = random_;}
 	pair<int, int> move_random(Board board)
 	{
-		unsigned long long hand = board.valid_move();
+		return move_random_hand(board.valid_move());
+	}
+	// 指定した候補手集合 hand からランダムに1手選ぶ。
+	// 呼び出し側で相手リーチの阻止手だけに hand を絞っておけば、
+	// ランダム手でも「止めるべきリーチを止められず即死」を防げる(案①)。
+	pair<int, int> move_random_hand(unsigned long long hand)
+	{
 		assert(hand);
 
 		const int sz = __builtin_popcountll(hand);

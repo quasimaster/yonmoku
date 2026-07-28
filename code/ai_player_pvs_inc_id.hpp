@@ -308,7 +308,10 @@ struct AIPlayerPVSIncID : Player
 			if (r) hand = r;
 		}
 
-		if (random && rng() % 100 < random) return move_random(board);
+		// ランダム手も相手リーチ阻止後の hand から選ぶ(案①)。
+		// 相手リーチがあれば hand は阻止手に絞られているため即死を避けられる。
+		// 相手リーチが無ければ hand は全合法手のままで従来と同一挙動。
+		if (random && rng() % 100 < random) return move_random_hand(hand);
 
 		unsigned long long mv = 0uLL;
 		int mx = -INF;

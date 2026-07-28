@@ -36,21 +36,21 @@ int main()
 	auto st = chrono::system_clock::now();
 	Game game(&p1, &human, true, {});  // AI(先手) vs 人間(後手)
 	p1.set_game(&game);                // set_game は AI 側のみ必要(HumanPlayer は不要)
-	game.game();                       // ★対局開始(人間手番で範囲外座標 → 一手戻る)連続で試合をする場合はここをコメントアウトする
+	// game.game();                       // ★対局開始(人間手番で範囲外座標 → 一手戻る)連続で試合をする場合はここをコメントアウトする
 	auto msec = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now() - st);
 	cout << "total: " << msec.count() / 1e3 << " sec" << endl;
 #ifdef BENCH
 	cout << "nodes: " << g_node_count << endl;
 #endif
-	return 0;   // 人間対局後はここで終了(以降の教師データ自己対戦は実行しない)連続で試合をする場合はここをコメントアウトする
+	// return 0;   // 人間対局後はここで終了(以降の教師データ自己対戦は実行しない)連続で試合をする場合はここをコメントアウトする
 
 	// ===== ここから機械学習の教師データ取得用の自己対戦(main_alpha.cpp より移植) =====
 	//   移植時の変更点: AIPlayer → AI、評価関数を _rit 版に置換(F が BoardInc を取るため)
 	int cnt[3] = {};
-	static const int N = 4096;//<=100000 4096 8192
+	static const int N = 8192;//<=100000 4096 8192
 
 	cout << "max_threads : " <<  omp_get_max_threads() << endl;
-	static const int setting = 8;//使用するスレッド数
+	static const int setting = 10;//使用するスレッド数
 	omp_set_num_threads(setting);
 
 	std::string output_first[setting];

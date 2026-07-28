@@ -1,0 +1,1 @@
+p1.set_random(100);
