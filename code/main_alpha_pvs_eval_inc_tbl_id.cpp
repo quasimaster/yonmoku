@@ -1,6 +1,20 @@
 #ifndef USE_ASSERT
 #define NDEBUG          // ← すべての #include より前(assert 無効化。-DUSE_ASSERT で有効化)
 #endif
+
+// ===== 最終盤の厳密評価(段パリティ規則 R2 + ゲート付き厳密打ち切り)=====
+// 設計: docs/設計書/最終盤/implementation-plan-endgame-exact.md
+//   USE_ENDGAME_R2  : turn>=60 の葉評価を R0 → R2 に差し替え(ヒューリスティックの精度改善)
+//   USE_ENDGAME_CUT : turn>=59 で「証明可能に厳密」な局面を確定値で即 return し部分木を刈る
+// どちらも -DUSE_ENDGAME_R2=0 -DUSE_ENDGAME_CUT=0 で従来と完全同一の挙動に戻せる。
+// (ヘッダ側の既定は 0 なので、この 2 行が本ハーネスで機能を有効化している唯一の箇所)
+#ifndef USE_ENDGAME_R2
+#define USE_ENDGAME_R2 1
+#endif
+#ifndef USE_ENDGAME_CUT
+#define USE_ENDGAME_CUT 1
+#endif
+
 # include <omp.h>
 
 #include "common.hpp"
@@ -12,13 +26,78 @@
 // AI を AIPlayerPVSIncID(root 反復深化)に差し替えただけで、評価・盤面・TT は流用元と同一。
 //   g++ -std=c++17 -O2 -fopenmp            code/main_alpha_pvs_eval_inc_tbl_id.cpp -o yonmoku_alpha_id
 //   g++ -std=c++17 -O2 -fopenmp -DUSE_ID=0 code/main_alpha_pvs_eval_inc_tbl_id.cpp -o yonmoku_alpha_base  (現行相当)
-// ノード数計測: -DBENCH / cnt 検証 assert 有効化: -DUSE_ASSERT
+//   g++ -std=c++17 -O2 -fopenmp -DUSE_ENDGAME_R2=0 -DUSE_ENDGAME_CUT=0 code/main_alpha_pvs_eval_inc_tbl_id.cpp -o yonmoku_alpha_id_off  (最終盤機能 OFF = 旧挙動)
+// ノード数計測: -DBENCH / cnt 検証 assert 有効化: -DUSE_ASSERT / 最終盤打ち切りの自己検査: -DEG_SELFCHECK=1
 
 #include "tt.hpp"
 #include "board_inc.hpp"
 #include "ai_player_pvs_inc_id.hpp"       // ★反復深化版(USE_ID で有/無切替)
 #include "evaluate_alpha_inc_tbl.hpp"     // ★7c → 統合版へ
 using AI = AIPlayerPVSIncID<int(*)(const BoardInc&, unsigned long long, unsigned long long, unsigned long long)>;
+
+// ===== 定跡(重複なし初手列)の読み込み =====
+// unique_opening/gen_unique_openings.cpp が出力するテキストを実行時に読む。
+//   形式: 1 行 1 手順で "    {{0,0}, {0,0}, {0,0}, {0,1}}," (手数は 4/5/6 手のいずれでも可)
+// 実行ディレクトリが読めない場合に備えて候補パスを順に試す。
+static vector<vector<pair<int, int> > > load_openings(const string& rel_path)
+{
+	static const char* prefix[] = {"", "../", "../../"};
+	ifstream ifs;
+	string used;
+	for(const char* p : prefix)
+	{
+		used = string(p) + rel_path;
+		ifs.open(used);
+		if(ifs) break;
+		ifs.clear();
+	}
+	if(!ifs)
+	{
+		cerr << "openings file not found: " << rel_path << endl;
+		return {};
+	}
+
+	vector<vector<pair<int, int> > > openings;
+	string line;
+	while(getline(ifs, line))
+	{
+		size_t head = line.find_first_not_of(" \t");
+		if(head == string::npos || line.compare(head, 2, "{{") != 0) continue;   // 宣言行 / "};" を読み飛ばす
+
+		vector<int> nums;                                 // 行中の整数を全て拾う(= {x,y} の並び)
+		for(size_t i = head; i < line.size(); )
+		{
+			if(isdigit((unsigned char)line[i]))
+			{
+				int v = 0;
+				while(i < line.size() && isdigit((unsigned char)line[i])) v = v * 10 + (line[i++] - '0');
+				nums.push_back(v);
+			}
+			else i++;
+		}
+		if(nums.empty() || nums.size() % 2 != 0)
+		{
+			cerr << "skip malformed opening line: " << line << endl;
+			continue;
+		}
+
+		vector<pair<int, int> > op;
+		bool ok = true;
+		for(size_t i = 0; i < nums.size(); i += 2)
+		{
+			if(nums[i] < 0 || nums[i] >= SIZE || nums[i + 1] < 0 || nums[i + 1] >= SIZE) { ok = false; break; }
+			op.emplace_back(nums[i], nums[i + 1]);
+		}
+		if(!ok)
+		{
+			cerr << "skip out-of-range opening line: " << line << endl;
+			continue;
+		}
+		openings.push_back(move(op));
+	}
+	cout << "openings loaded: " << openings.size() << " from " << used << endl;
+	return openings;
+}
 
 int main()
 {
@@ -30,24 +109,34 @@ int main()
 	// 人間の手番で範囲外の座標(例 "100 100" や "-1 -1")を入力すると、
 	// 直前の「AI 手 + 自分の手」を巻き戻して打ち直せる(設計: docs/設計書/implementation-plan-undo.md)。
 	AI p1(10, evaluate_pointfir_cont_layer_intersection_rit);   // 先手 = AI
+	AI p2(10, evaluate_pointsec_cont_layer_intersection_rit);   // 先手 = AI
 	HumanPlayer human;                                          // 後手 = 人間(undo 対応)
 	//   先手を人間にしたい場合は下の Game を  Game game(&human, &p1, true, {});  に差し替える
 
 	auto st = chrono::system_clock::now();
 	Game game(&p1, &human, true, {});  // AI(先手) vs 人間(後手)
 	p1.set_game(&game);                // set_game は AI 側のみ必要(HumanPlayer は不要)
-	// game.game();                       // ★対局開始(人間手番で範囲外座標 → 一手戻る)連続で試合をする場合はここをコメントアウトする
+	game.game();                       // ★対局開始(人間手番で範囲外座標 → 一手戻る)連続で試合をする場合はここをコメントアウトする
 	auto msec = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now() - st);
 	cout << "total: " << msec.count() / 1e3 << " sec" << endl;
 #ifdef BENCH
 	cout << "nodes: " << g_node_count << endl;
 #endif
-	// return 0;   // 人間対局後はここで終了(以降の教師データ自己対戦は実行しない)連続で試合をする場合はここをコメントアウトする
+	return 0;   // 人間対局後はここで終了(以降の教師データ自己対戦は実行しない)連続で試合をする場合はここをコメントアウトする
 
 	// ===== ここから機械学習の教師データ取得用の自己対戦(main_alpha.cpp より移植) =====
 	//   移植時の変更点: AIPlayer → AI、評価関数を _rit 版に置換(F が BoardInc を取るため)
 	int cnt[3] = {};
-	static const int N = 8192;//<=100000 4096 8192
+
+	// 初手は「全通り(4^6 = 4096 通りの 3 手)」ではなく、対称性で重複を除いた定跡ファイルから取る。
+	const vector<vector<pair<int, int> > > openings = load_openings("unique_opening/unique_openings_4.txt");
+	if(openings.empty())
+	{
+		cerr << "no openings; abort self-play" << endl;
+		return 1;
+	}
+	static const int PASSES = 1;                      // 定跡集合を何巡するか(ランダム性があるので巡ごとに棋譜は変わる)
+	const int N = (int)openings.size() * PASSES;      // 1 スレッドあたりの対局数
 
 	cout << "max_threads : " <<  omp_get_max_threads() << endl;
 	static const int setting = 10;//使用するスレッド数
@@ -79,7 +168,6 @@ int main()
 	ofs_log.open(log);
 
 	static const bool display = false;//表示の変更
-	static const int start[4] = {0, 1, 2, 3};
 	int gameNum[setting];
 
 	static const int start_num[setting] = {0,0,0,0,0,0,0,0};
@@ -101,8 +189,7 @@ int main()
 			p2.set_random(15);//一部ランダム
 
 			// cout << "Game #" << t  << endl;
-			Game game(&p1, &p2, display, {{start[t % 4], start[(t / 4) % 4]}, {start[(t / 16) % 4], start[(t / 64) % 4]},
-											{start[(t / 256) % 4], start[(t / 1024) % 4]}});
+			Game game(&p1, &p2, display, openings[t % (int)openings.size()]);   // ★定跡ファイルの手順を初手に使う
 			p1.set_game(&game);
         	p2.set_game(&game);
 			enum Color r = game.game();

@@ -33,6 +33,41 @@
 #define USE_ID 1
 #endif
 
+// フェーズ2(最終盤のゲート付き厳密打ち切り)。
+// 設計: docs/設計書/最終盤/implementation-plan-endgame-exact.md §3.3
+//   0 = 現行と完全同一(追記は一切効かない)
+//   1 = turn >= 59 で「R2 が厳密であると証明できる」局面を確定値で即 return し部分木を刈る
+#ifndef USE_ENDGAME_CUT
+#define USE_ENDGAME_CUT 0
+#endif
+
+// フェーズ3(任意・既定 OFF)。turn=62 はゲートを通らなくても「勝敗を断定したときだけ」健全なので、
+// 断定した場合に限り打ち切る(設計書 §3.5)。USE_ENDGAME_CUT=1 のときのみ意味を持つ。
+#ifndef USE_ENDGAME_CUT62
+#define USE_ENDGAME_CUT62 0
+#endif
+
+// 打ち切りで得た値を TT に入れるときの depth。
+// 局面の真値(level に依存しない)なので、どの深さの probe からカットに使っても正しい。
+#ifndef EG_TT_DEPTH
+#define EG_TT_DEPTH 64
+#endif
+
+// 自己検査ビルド。打ち切り発火時に部分木を全読みして勝ち/引き分け/負けの 3 値を照合する
+// (設計書 §5.3)。極めて遅くなるので検証専用。
+#ifndef EG_SELFCHECK
+#define EG_SELFCHECK 0
+#endif
+
+#if USE_ENDGAME_CUT
+#include "endgame_exact.hpp"
+#endif
+#if EG_SELFCHECK
+#include <cstdio>
+#include <cstdlib>
+inline thread_local long long g_eg_check_count = 0;   // 照合した打ち切り発火数
+#endif
+
 // 提案1後半(反復深化)版。ai_player_pvs_inc.hpp の AIPlayerPVSInc のコピーで、
 // struct を AIPlayerPVSIncID に改名し、root(move())にのみ反復深化を実装したもの。
 //   - evaluate_board(内部ノード)/ update_cut / メンバは流用元と完全同一(無変更)
@@ -72,6 +107,9 @@ struct AIPlayerPVSIncID : Player
 		assert(board_inc_consistent(board));   // 7c: cnt の増分更新の妥当性検証(NDEBUG で消える)
 		unsigned long long hand = board.b.valid_move();
 		if (!hand) return 0;
+		// ★turn を巻き上げ(旧 :103 / :117 / :121 の再計算を兼ねる)。
+		//   board はこの間変化しないので挙動は不変で、popcount の呼び出し回数はむしろ減る。
+		const int turn = board.b.turn();// turn number (the number of stones = turn - 1)
 
 		//[1] probe
 		const unsigned long long key = TranspositionTable::hash(board.b);
@@ -100,25 +138,64 @@ struct AIPlayerPVSIncID : Player
 			const unsigned long long rMe_raw = Board::reach(board.b.Me);   // 提案2: スコープ外へ持ち上げ
 			{
 				const unsigned long long r = hand & rMe_raw;
-				if (r) return INF - board.b.turn();
+				if (r) return INF - turn;
 			}
 			const unsigned long long rYou_raw = Board::reach(board.b.You); // 提案2: 名前を付けて保持
 			{
 				if (hand & rYou_raw) hand = hand & rYou_raw;
-				else if (level <= 0)
+				else
 				{
-					const int ev = evaluate_func(board, rMe_raw, rYou_raw, hand);  // 提案2: 再計算排除
-#if TT_STORE_LEAF
-					tt.store(key, ev, 0, TT_EXACT, TT_NO_MOVE);   //[2] 葉も depth0 で格納
+					// ここに来た時点で hand & rMe_raw == 0 かつ hand & rYou_raw == 0。
+					// = 「即座に置けるマスの上には双方どちらのリーチも無い」= 研究の制約(C)。
+					// 制約(C) が成立する唯一の位置なので、厳密打ち切りの挿入点もここ 1 点に限られる。
+#if USE_ENDGAME_CUT
+					if (turn >= 59)
+					{
+						const bool gated = endgame_gate(board, turn);
+						// フェーズ3(既定 OFF): turn=62 はゲート無しでも「勝敗を断定したときだけ」健全。
+						// 誤るとしても「決着を引き分けと言う」方向にしか誤らない(設計書 §3.5)。
+						// turn=61 に広げてはならない(ゲート無しの 61 は誤断定 2.0% がある)。
+						const bool sound62 = USE_ENDGAME_CUT62 && turn == 62;
+						if (gated || sound62)
+						{
+							const int ev = endgame_value(board.b, turn, rMe_raw, rYou_raw);
+							if (gated || ev != 0)   // ゲート不通過の turn=62 は断定したときだけ信じる
+							{
+#if EG_SELFCHECK
+								{//打ち切りを使わない全読みと 勝ち/引き分け/負け の 3 値で照合(設計書 §5.3)
+									const int truth = endgame_solve_exact(board.b);
+									const int sign  = (ev > 0) - (ev < 0);
+									if (sign != truth)
+									{
+										fprintf(stderr, "EG_SELFCHECK FAILED: turn=%d gated=%d ev=%d sign=%d truth=%d Me=%llu You=%llu\n",
+										        turn, (int)gated, ev, sign, truth,
+										        (unsigned long long)board.b.Me, (unsigned long long)board.b.You);
+										abort();
+									}
+									g_eg_check_count++;
+								}
 #endif
-					return ev;
+								tt.store(key, ev, EG_TT_DEPTH, TT_EXACT, TT_NO_MOVE);
+								return ev;         // 厳密値なので level に関係なく部分木を丸ごと刈る
+							}
+						}
+					}
+					// ゲート不通過 = 確定できない → 何も断定せず現行の経路へ落ちる
+#endif
+					if (level <= 0)
+					{
+						const int ev = evaluate_func(board, rMe_raw, rYou_raw, hand);  // 提案2: 再計算排除
+#if TT_STORE_LEAF
+						tt.store(key, ev, 0, TT_EXACT, TT_NO_MOVE);   //[2] 葉も depth0 で格納
+#endif
+						return ev;
+					}
 				}
 				hand &= ~(rYou_raw >> SIZE * SIZE);
-				if (!hand) return -(INF - (board.b.turn() + 1));
+				if (!hand) return -(INF - (turn + 1));
 			}
 		}
 
-		const int turn = board.b.turn();// turn number (the number of stones = turn - 1)
 		unsigned char best_move = TT_NO_MOVE;
 		bool pv_done = false;   // ★PVS: フルウィンドウで探索済みの手があるか(§3.1)
 

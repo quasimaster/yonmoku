@@ -13,6 +13,16 @@
 // evaluate_point{fir,sec}_it / エントリ _rit に置き換わったため削除した。
 // 残る 3 関数は _rit から無変更で流用される(evaluate_alpha_inc_tbl.hpp:3)。
 
+// フェーズ1(最終盤の葉評価を規則 R0 → R2 に差し替え)。
+// 設計: docs/設計書/最終盤/implementation-plan-endgame-exact.md §3.4
+//   0 = 現行の R0(既存ビルドの挙動は完全に不変)
+//   1 = 段パリティ定理 + 低段優先の R2(turn=60 で誤断定 4.1% → 1.8%)
+// ここは厳密打ち切りのゲートを通らなかった局面が葉に落ちたときに使われる
+// 【ヒューリスティック】であり、確定値ではない(確定は endgame_exact.hpp が担う)。
+#ifndef USE_ENDGAME_R2
+#define USE_ENDGAME_R2 0
+#endif
+
 inline int continuous_fir_t(const Board &board, unsigned long long rMe, const unsigned long long rYou, const int turn, const int turn_bucket)
 {
 	if(turn >= 60){
@@ -53,6 +63,20 @@ inline int reach_layer_intersection_t(const Board &board, const enum Color now, 
 	int sum = 0;
 
 	if(turn >= 60){
+#if USE_ENDGAME_R2
+		// 規則 R2: 段パリティ定理(黒 = 奇数段 / 白 = 偶数段)+ 低段優先(低い段の脅威が先に発火)。
+		// rMe/rYou はエスケープフィルタ適用後。intersection_3 は段3 = 奇数段なので黒側に数える。
+		// 判定順 mask_2 → mask_3 → mask_4 が本質(順序を崩すと R0 の欠陥B が再発する)。
+		{
+			const unsigned long long rB = (now == Color::Black) ? rMe  : rYou;
+			const unsigned long long rW = (now == Color::Black) ? rYou : rMe;
+			int v = 0;                                             // +1 = 黒勝ち / -1 = 白勝ち
+			if      (rW & mask_2)                     v = -1;      // 白の段2(R0 の欠陥A: 白番分岐に無かった)
+			else if ((rB & mask_3) || intersection_3) v = +1;      // 黒の段3
+			else if (rW & mask_4)                     v = -1;      // 白の段4(R0 の欠陥B: 黒の段3 より先に見ていた)
+			if (v) sum = ((now == Color::Black) ? v : -v) * (INF - 100000);
+		}
+#else
 		if(now == Color::Black)
 		{
 			if(rMe & mask_3 || intersection_3) sum = INF - 100000;
@@ -63,6 +87,7 @@ inline int reach_layer_intersection_t(const Board &board, const enum Color now, 
 			if(rMe & mask_4) sum = INF -100000;
 			else if(rYou & mask_3 || intersection_3) sum = - INF + 100000;
 		}
+#endif
 		return sum;
 	}
 
