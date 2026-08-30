@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>立体四目並べ</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230e1116'/%3E%3Ccircle cx='11' cy='11' r='5' fill='%23e9ecf1'/%3E%3Ccircle cx='21' cy='21' r='5' fill='%234f9dff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="./style.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three.module.js",
+    "three/addons/controls/OrbitControls.js": "./vendor/OrbitControls.js"
+  }
+}
+</script>
+</head>
+<body>
+
+<div id="app">
+  <canvas id="scene"></canvas>
+
+  <!-- 上部バー -->
+  <header id="topbar">
+    <div class="brand">立体四目並べ</div>
+    <div class="controls">
+      <label class="ctl">
+        <span>難易度</span>
+        <select id="profile"></select>
+      </label>
+      <span id="profilehint" class="hint"></span>
+      <label class="ctl">
+        <span>手番</span>
+        <select id="side">
+          <option value="black">先手(黒)</option>
+          <option value="white">後手(白)</option>
+        </select>
+      </label>
+      <button id="newgame" class="primary">新規対局</button>
+    </div>
+  </header>
+
+  <!-- 右パネル -->
+  <aside id="panel">
+    <section class="card">
+      <div class="row">
+        <span class="label">手数</span>
+        <span id="movecount" class="value">0</span>
+      </div>
+      <div class="row">
+        <span class="label">手番</span>
+        <span id="turnwho" class="value">—</span>
+      </div>
+      <div id="statusline" class="status"></div>
+    </section>
+
+    <section class="card" id="evalcard">
+      <div class="card-title">
+        評価値
+        <span id="evalfresh" class="tag"></span>
+      </div>
+      <div class="winbar" title="黒から見た勝率">
+        <div id="winbar-black" class="winbar-black"></div>
+        <div class="winbar-mid"></div>
+      </div>
+      <div class="winbar-legend">
+        <span id="wr-black">黒 50.0%</span>
+        <span id="wr-white">50.0% 白</span>
+      </div>
+      <div class="row">
+        <span class="label">評価値(黒視点)</span>
+        <span id="score" class="value mono">—</span>
+      </div>
+      <div class="row">
+        <span class="label">思考時間</span>
+        <span id="thinktime" class="value mono">—</span>
+      </div>
+      <div class="row">
+        <span class="label">探索ノード</span>
+        <span id="nodes" class="value mono">—</span>
+      </div>
+      <p id="evalnote" class="note"></p>
+    </section>
+
+    <section class="card">
+      <div class="card-title">表示</div>
+      <label class="toggle"><input type="checkbox" id="xray"> 透視モード</label>
+      <label class="toggle"><input type="checkbox" id="spin" checked> 思考中に自動回転</label>
+      <div class="btnrow">
+        <button id="undo">一手戻る</button>
+        <button id="resetcam">視点リセット</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-title">棋譜</div>
+      <ol id="record" class="record"></ol>
+    </section>
+  </aside>
+
+  <!-- 思考中インジケータ -->
+  <div id="thinking" class="thinking hidden">
+    <div class="spinner"></div>
+    <div class="thinking-text">AI 思考中<span id="elapsed"></span></div>
+  </div>
+
+  <!-- 起動中 / エラー -->
+  <div id="boot" class="overlay">
+    <div class="boot-box">
+      <div class="spinner"></div>
+      <p>エンジンを読み込んでいます…</p>
+    </div>
+  </div>
+  <div id="fatal" class="overlay hidden">
+    <div class="boot-box">
+      <h2>表示できません</h2>
+      <p id="fatal-msg"></p>
+    </div>
+  </div>
+
+  <!-- 対局結果 -->
+  <div id="result" class="overlay hidden">
+    <div class="result-box">
+      <h2 id="result-title"></h2>
+      <p id="result-sub"></p>
+      <button id="result-close">盤面を見る</button>
+      <button id="result-again" class="primary">もう一局</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="./main.js"></script>
+</body>
+</html>
