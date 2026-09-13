@@ -1,1 +1,2 @@
-p1.set_random(100);
+
+		if(string(argv[i]) == "--weights" && i + 1 < ar

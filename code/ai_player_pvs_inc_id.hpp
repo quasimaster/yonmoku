@@ -7,6 +7,13 @@
 #include "tt.hpp"
 #include "board_inc.hpp"
 
+// 探索が使う乱数(同点手の選択 / set_random によるランダム手)。既定はグローバル rng(common.hpp)。
+// 複数スレッドで AI を回すプログラムは、include 前に thread_local な生成器を指すよう定義する
+// (例: code/match_weights.cpp)。未定義なら従来と完全に同一。
+#ifndef AI_RNG
+#define AI_RNG rng
+#endif
+
 // 葉(level <= 0 の evaluate_func)を depth0 EXACT として格納するか。
 // -DTT_STORE_LEAF=0 で無効化してベンチ比較できる(実装計画書 §4.4)
 #ifndef TT_STORE_LEAF
@@ -33,12 +40,39 @@
 #define USE_ID 1
 #endif
 
+// root 反復深化の最終読み深さ d(総読み手数 N = d + 1)を外から差し替えるためのフック。
+// 既定の展開は従来のハードコード式と文字通り同一なので、既存ビルドの挙動は一切変わらない。
+// Web 版(難易度プロファイル)だけが -DYON_DEPTH_TARGET=yon_depth_target で差し替える。
+//   設計: docs/設計書/Web公開/implementation-plan-web-ui-3d.md §2.4
+#ifndef YON_DEPTH_TARGET
+// #define YON_DEPTH_TARGET(turn, level) ((turn)>=37?25:(turn)>=29?11:(turn)>=21?9:(level)-1)//教師データ用ver7,シグモイド関数の係数は1840
+#define YON_DEPTH_TARGET(turn, level) ((turn)>=35?27:(turn)>=27?11:(turn)>=19?9:(level)-1)//教師データ用ver8,シグモイド関数の係数は1840
+
+#endif
+
 // フェーズ2(最終盤のゲート付き厳密打ち切り)。
 // 設計: docs/設計書/最終盤/implementation-plan-endgame-exact.md §3.3
 //   0 = 現行と完全同一(追記は一切効かない)
 //   1 = turn >= 59 で「R2 が厳密であると証明できる」局面を確定値で即 return し部分木を刈る
 #ifndef USE_ENDGAME_CUT
 #define USE_ENDGAME_CUT 0
+#endif
+
+// Universal WDL solver: enabled by move count only, never by a board gate.
+// Opt-in because WDL scores do not encode distance to mate.
+#ifndef USE_ENDGAME_UNIVERSAL
+#define USE_ENDGAME_UNIVERSAL 0
+#endif
+#ifndef ENDGAME_UNIVERSAL_MAX_EMPTY
+#define ENDGAME_UNIVERSAL_MAX_EMPTY 10
+#endif
+#if USE_ENDGAME_UNIVERSAL
+#include "endgame_universal.hpp"
+static_assert(ENDGAME_UNIVERSAL_MAX_EMPTY >= 0 && ENDGAME_UNIVERSAL_MAX_EMPTY <= 12,
+              "ENDGAME_UNIVERSAL_MAX_EMPTY must be between 0 and 12");
+#ifndef ENDGAME_UNIVERSAL_EVALUATE
+#define ENDGAME_UNIVERSAL_EVALUATE(b) endgame_universal::solve(b)
+#endif
 #endif
 
 // フェーズ3(任意・既定 OFF)。turn=62 はゲートを通らなくても「勝敗を断定したときだけ」健全なので、
@@ -133,6 +167,14 @@ struct AIPlayerPVSIncID : Player
 #endif
 		}
 		const int alpha_orig = alpha;   // bound 分類用に保存
+#if USE_ENDGAME_UNIVERSAL
+		if (65 - turn <= ENDGAME_UNIVERSAL_MAX_EMPTY)
+		{
+			const int ev = ENDGAME_UNIVERSAL_EVALUATE(board.b) * (INF - 100000);
+			tt.store(key, ev, 64, TT_EXACT, TT_NO_MOVE);
+			return ev;
+		}
+#endif
 
 		{//reach (既存のまま。即勝ち/即負けの return は格納しない)
 			const unsigned long long rMe_raw = Board::reach(board.b.Me);   // 提案2: スコープ外へ持ち上げ
@@ -388,7 +430,7 @@ struct AIPlayerPVSIncID : Player
 		// ランダム手も相手リーチ阻止後の hand から選ぶ(案①)。
 		// 相手リーチがあれば hand は阻止手に絞られているため即死を避けられる。
 		// 相手リーチが無ければ hand は全合法手のままで従来と同一挙動。
-		if (random && rng() % 100 < random) return move_random_hand(hand);
+		if (random && AI_RNG() % 100 < random) return move_random_hand(hand);
 
 		unsigned long long mv = 0uLL;
 		int mx = -INF;
@@ -404,7 +446,7 @@ struct AIPlayerPVSIncID : Player
 		//   終盤は葉が終端局面(勝敗確定)で評価関数を経由しないため実用上は成立するが、
 		//   奇数手読みは評価視点前提から外れる。偶数手読みを厳守したい場合は d_target を偶数にすること。
 		// const int d_target = turn>=39?23:turn>=31?11:turn>=23?9:level - 1;//教師データ用ver6,シグモイド関数の係数は1840
-		const int d_target = turn>=37?25:turn>=29?11:turn>=21?9:level - 1;//教師データ用ver7,シグモイド関数の係数は1840
+		const int d_target = YON_DEPTH_TARGET(turn, level);//教師データ用ver7,シグモイド関数の係数は1840(既定展開 = turn>=37?25:turn>=29?11:turn>=21?9:level-1)
 
 		// root 手を固定長配列に収集(強制手絞り込み後の hand。合法手は最大16)。
 		// 初期順は静的 move_order のグループ順(現行 dynamic 収集と同じ走査順)。
@@ -542,7 +584,7 @@ struct AIPlayerPVSIncID : Player
 		{
 			vector<pair<int, int> > XY;
 			for (int xyz = 0; xyz < BOARD_SIZE; xyz++) if (mv & 1uLL << xyz) XY.emplace_back(X(xyz), Y(xyz));
-			return XY[rng() % XY.size()];
+			return XY[AI_RNG() % XY.size()];
 		}
 	}
 };

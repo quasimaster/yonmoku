@@ -2,12 +2,20 @@
 #define NDEBUG          // ← すべての #include より前(assert 無効化。-DUSE_ASSERT で有効化)
 #endif
 
+// main_alpha_pvs_eval_inc_tbl_id.cpp の「重み外部ファイル化」版(_w)。
+// 設計: docs/設計書/評価関数バージョン管理/implementation-plan-eval-weights-file.md §2.6
+//
+// 流用元との差分は次の 4 点だけ。対局ループ・教師データ自己対戦・出力書式は完全に同一。
+//   1. include を evaluate_alpha_inc_tbl_w.hpp に差し替え
+//   2. using AI を AIPlayerPVSIncID<EvalFn> に差し替え
+//   3. init_cnt_tbl() → init_eval_tbl()(重み表はモデル側が持つ)
+//   4. コマンドライン引数 --weights <path> を追加(省略時は組み込み既定値)
+
 // ===== 最終盤の厳密評価(段パリティ規則 R2 + ゲート付き厳密打ち切り)=====
 // 設計: docs/設計書/最終盤/implementation-plan-endgame-exact.md
 //   USE_ENDGAME_R2  : turn>=60 の葉評価を R0 → R2 に差し替え(ヒューリスティックの精度改善)
 //   USE_ENDGAME_CUT : turn>=59 で「証明可能に厳密」な局面を確定値で即 return し部分木を刈る
 // どちらも -DUSE_ENDGAME_R2=0 -DUSE_ENDGAME_CUT=0 で従来と完全同一の挙動に戻せる。
-// (ヘッダ側の既定は 0 なので、この 2 行が本ハーネスで機能を有効化している唯一の箇所)
 #ifndef USE_ENDGAME_R2
 #define USE_ENDGAME_R2 1
 #endif
@@ -22,18 +30,16 @@
 #include "player.hpp"
 #include "game.hpp"
 
-// 提案1後半(反復深化)版ハーネス。母体は main_alpha_pvs_eval_inc_tbl.cpp(7a+7b+7c 統合版)。
-// AI を AIPlayerPVSIncID(root 反復深化)に差し替えただけで、評価・盤面・TT は流用元と同一。
-//   g++ -std=c++17 -O2 -fopenmp            code/main_alpha_pvs_eval_inc_tbl_id.cpp -o yonmoku_alpha_id
-//   g++ -std=c++17 -O2 -fopenmp -DUSE_ID=0 code/main_alpha_pvs_eval_inc_tbl_id.cpp -o yonmoku_alpha_base  (現行相当)
-//   g++ -std=c++17 -O2 -fopenmp -DUSE_ENDGAME_R2=0 -DUSE_ENDGAME_CUT=0 code/main_alpha_pvs_eval_inc_tbl_id.cpp -o yonmoku_alpha_id_off  (最終盤機能 OFF = 旧挙動)
+//   g++ -std=c++17 -O2 -fopenmp            code/main_alpha_pvs_eval_inc_tbl_id_w.cpp -o yonmoku_alpha_id
+//   g++ -std=c++17 -O2 -fopenmp -DUSE_ID=0 code/main_alpha_pvs_eval_inc_tbl_id_w.cpp -o yonmoku_alpha_base  (現行相当)
+//   実行時にモデルを差し替える: ./yonmoku_alpha_id --weights weights/alpha/ver7_2.txt
 // ノード数計測: -DBENCH / cnt 検証 assert 有効化: -DUSE_ASSERT / 最終盤打ち切りの自己検査: -DEG_SELFCHECK=1
 
 #include "tt.hpp"
 #include "board_inc.hpp"
 #include "ai_player_pvs_inc_id.hpp"       // ★反復深化版(USE_ID で有/無切替)
-#include "evaluate_alpha_inc_tbl.hpp"     // ★7c → 統合版へ
-using AI = AIPlayerPVSIncID<int(*)(const BoardInc&, unsigned long long, unsigned long long, unsigned long long)>;
+#include "evaluate_alpha_inc_tbl_w.hpp"   // ★重み外部化版
+using AI = AIPlayerPVSIncID<EvalFn>;      // ★関数ポインタ → ファンクタ
 
 // ===== 定跡(重複なし初手列)の読み込み =====
 // unique_opening/gen_unique_openings.cpp が出力するテキストを実行時に読む。
@@ -99,30 +105,51 @@ static vector<vector<pair<int, int> > > load_openings(const string& rel_path)
 	return openings;
 }
 
-int main()
+// ★使用する評価関数の重み。--weights が無ければ組み込み既定値。
+static EvalWeights g_loaded;
+static const EvalWeights* g_weights = nullptr;
+
+int main(int argc, char** argv)
 {
 	init_lines();
 	init_sq_lines();      // 7c と共通(BoardInc の増分維持に必要)
-	init_cnt_tbl();       // ★統合版のテーブル構築(init_cnt_to_v() を置換)
+	init_eval_tbl();      // ★init_cnt_tbl() の置き換え(flag_tbl のみ。重み表はモデル側が持つ)
+
+	// ===== 重みモデルの決定(設計書 §2.4)=====
+	// 読み込みに失敗したら組み込み既定値へ戻さずに終了する。
+	// どちらのモデルで教師データを取ったのか分からなくなる事故を防ぐため。
+	g_weights = &EvalWeights::builtin();
+	for(int i = 1; i < argc; i++)
+	{
+		if(string(argv[i]) == "--weights" && i + 1 < argc)
+		{
+			string err;
+			if(!g_loaded.load(argv[++i], &err)) { cerr << "weights error: " << err << endl; return 1; }
+			g_weights = &g_loaded;
+		}
+		else { cerr << "usage: " << argv[0] << " [--weights <path>]" << endl; return 2; }
+	}
+	cout << "weights: " << g_weights->name
+	     << (g_weights == &EvalWeights::builtin() ? " (builtin)" : " (file)") << endl;
 
 	// ===== 人間 vs AI 対局(undo 機能付き)=====
 	// 人間の手番で範囲外の座標(例 "100 100" や "-1 -1")を入力すると、
 	// 直前の「AI 手 + 自分の手」を巻き戻して打ち直せる(設計: docs/設計書/implementation-plan-undo.md)。
-	AI p1(10, evaluate_pointfir_cont_layer_intersection_rit);   // 先手 = AI
-	AI p2(10, evaluate_pointsec_cont_layer_intersection_rit);   // 先手 = AI
-	HumanPlayer human;                                          // 後手 = 人間(undo 対応)
+	AI p1(10, EvalFn{g_weights, false});   // 先手 = AI
+	AI p2(10, EvalFn{g_weights, true });   // 後手 = AI
+	HumanPlayer human;                     // 後手 = 人間(undo 対応)
 	//   先手を人間にしたい場合は下の Game を  Game game(&human, &p1, true, {});  に差し替える
 
 	auto st = chrono::system_clock::now();
 	Game game(&p1, &human, true, {});  // AI(先手) vs 人間(後手)
 	p1.set_game(&game);                // set_game は AI 側のみ必要(HumanPlayer は不要)
-	// game.game();                       // ★対局開始(人間手番で範囲外座標 → 一手戻る)連続で試合をする場合はここをコメントアウトする
+	game.game();                       // ★対局開始(人間手番で範囲外座標 → 一手戻る)連続で試合をする場合はここをコメントアウトする
 	auto msec = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now() - st);
 	cout << "total: " << msec.count() / 1e3 << " sec" << endl;
 #ifdef BENCH
 	cout << "nodes: " << g_node_count << endl;
 #endif
-	// return 0;   // 人間対局後はここで終了(以降の教師データ自己対戦は実行しない)連続で試合をする場合はここをコメントアウトする
+	return 0;   // 人間対局後はここで終了(以降の教師データ自己対戦は実行しない)連続で試合をする場合はここをコメントアウトする
 
 	// ===== ここから機械学習の教師データ取得用の自己対戦(main_alpha.cpp より移植) =====
 	//   移植時の変更点: AIPlayer → AI、評価関数を _rit 版に置換(F が BoardInc を取るため)
@@ -188,8 +215,8 @@ int main()
 		int thread = omp_get_thread_num();
 		for(int t = start_num[thread]; t < N; t++)
 		{
-			AI p1(8, evaluate_pointfir_cont_layer_intersection_rit);
-			AI p2(8, evaluate_pointsec_cont_layer_intersection_rit);
+			AI p1(8, EvalFn{g_weights, false});
+			AI p2(8, EvalFn{g_weights, true });
 			p1.set_random(15);
 			p2.set_random(15);//一部ランダム
 
