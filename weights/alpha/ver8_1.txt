@@ -1,0 +1,75 @@
+# 立体四目並べ 評価関数重み
+version: 1
+name: ver8.1
+
+[fir.bucket0]
+stdweight         = 0,-62,-22,0,28,72,0
+maketweight       = 63,-19,49,4,12,-66,33,20
+conti_maketweight = 202,265,168,91,178,168
+layer_me          = 139,469,147
+layer_you         = 236,241,219
+intersection      = 443,348,837,-80
+continuous        = 3153
+
+[fir.bucket1]
+stdweight         = 0,-95,-23,0,31,112,0
+maketweight       = 116,-80,71,22,35,-99,42,24
+conti_maketweight = 216,293,86,78,131,68
+layer_me          = 211,607,205
+layer_you         = 340,378,281
+intersection      = 329,283,1413,-533
+continuous        = 1139
+
+[fir.bucket2]
+stdweight         = 0,-72,-5,0,17,56,0
+maketweight       = 289,-67,128,70,107,-9,51,45
+conti_maketweight = 332,573,131,160,286,73
+layer_me          = 149,826,134
+layer_you         = 313,588,234
+intersection      = 461,309,661,494
+continuous        = 758
+
+[fir.bucket3]
+stdweight         = 0,-75,-38,0,-10,21,0
+maketweight       = 385,-131,159,151,142,29,20,30
+conti_maketweight = 622,1111,175,346,478,-3
+layer_me          = 179,1437,140
+layer_you         = 441,950,297
+intersection      = 1057,633,785,293
+continuous        = 356
+
+[sec.bucket0]
+stdweight         = 0,-62,-23,0,28,77,0
+maketweight       = 18,-72,29,5,83,-10,56,24
+conti_maketweight = 82,135,-37,139,179,293
+layer_me          = 239,237,229
+layer_you         = 168,466,169
+intersection      = 356,899,1468,-172
+continuous        = 1619
+
+[sec.bucket1]
+stdweight         = 0,-87,-25,0,30,123,0
+maketweight       = 27,-84,36,5,94,-87,72,38
+conti_maketweight = 88,117,23,185,233,124
+layer_me          = 350,412,304
+layer_you         = 221,587,207
+intersection      = 290,337,81,-1132
+continuous        = 1056
+
+[sec.bucket2]
+stdweight         = 0,-33,0,0,15,93,0
+maketweight       = 108,-33,49,25,282,-81,138,85
+conti_maketweight = 170,295,48,395,623,176
+layer_me          = 284,673,231
+layer_you         = 166,856,137
+intersection      = 491,331,937,-1134
+continuous        = 729
+
+[sec.bucket3]
+stdweight         = 0,2,17,0,35,109,0
+maketweight       = 850,-34,28,29,244,-170,136,121
+conti_maketweight = 169,363,-133,812,1411,358
+layer_me          = 470,1269,350
+layer_you         = 133,1390,86
+intersection      = 1096,1076,1354,-327
+continuous        = 625
