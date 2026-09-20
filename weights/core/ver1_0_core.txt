@@ -1,0 +1,94 @@
+# 立体四目並べ 評価関数重み(核 2 マスの全状態 core 付き)
+version: 2
+name: ver1.0
+#
+# 学習時の loss(交差エントロピーの総和。小さいほど教師値に近い)
+# 同じ側・同じバケット同士でのみ比較できる(対象の局面数が違えば大きさも変わる)
+# loss  fir.bucket0 (turn  4~17) = 277350.437
+# loss  fir.bucket1 (turn 18~31) = 244744.877
+# loss  fir.bucket2 (turn 32~45) = 134348.479
+# loss  fir.bucket3 (turn 46~59) = 41399.592
+# loss  sec.bucket0 (turn  5~18) = 307230.800
+# loss  sec.bucket1 (turn 19~32) = 232646.946
+# loss  sec.bucket2 (turn 33~46) = 115210.577
+# loss  sec.bucket3 (turn 47~60) = 36597.155
+
+[fir.bucket0]
+stdweight         = 0,-76,-24,0,34,90,0
+maketweight       = 157,-26,53,5,-22,-58,14,21
+conti_maketweight = 203,199,589,85,118,110
+layer_me          = 186,492,187
+layer_you         = 275,248,228
+intersection      = 94,0,0,0
+continuous        = 1616
+core              = 32,17,91,-34,-11,-119
+
+[fir.bucket1]
+stdweight         = 0,-96,-26,0,36,123,0
+maketweight       = 154,-76,85,9,27,-68,41,22
+conti_maketweight = 234,301,126,68,133,57
+layer_me          = 195,628,190
+layer_you         = 341,404,234
+intersection      = 302,362,0,0
+continuous        = 947
+core              = 120,43,101,3,-42,-92
+
+[fir.bucket2]
+stdweight         = 0,-70,-3,0,30,65,0
+maketweight       = 213,-87,135,66,83,11,44,35
+conti_maketweight = 366,666,156,176,323,67
+layer_me          = 138,877,124
+layer_you         = 309,641,189
+intersection      = 469,415,734,-781
+continuous        = 685
+core              = 123,-12,62,-78,-107,-142
+
+[fir.bucket3]
+stdweight         = 0,-66,-12,0,23,60,0
+maketweight       = 322,-331,182,110,107,48,25,32
+conti_maketweight = 684,1293,145,424,602,-47
+layer_me          = 236,1654,187
+layer_you         = 477,1209,264
+intersection      = 1223,888,484,256
+continuous        = 623
+core              = -100,-120,-85,-164,-186,-172
+
+[sec.bucket0]
+stdweight         = 0,-79,-23,0,31,96,0
+maketweight       = -29,-83,23,-10,78,-17,40,33
+conti_maketweight = 91,112,121,141,133,79
+layer_me          = 294,235,245
+layer_you         = 197,503,171
+intersection      = 266,0,0,0
+continuous        = 1404
+core              = 48,37,102,-9,-1,-117
+
+[sec.bucket1]
+stdweight         = 0,-90,-29,0,32,131,0
+maketweight       = 14,-55,31,-3,99,-75,76,41
+conti_maketweight = 69,143,43,195,280,136
+layer_me          = 329,416,244
+layer_you         = 216,619,167
+intersection      = 324,290,0,0
+continuous        = 965
+core              = 94,32,114,41,7,-74
+
+[sec.bucket2]
+stdweight         = 0,-44,-11,0,20,92,0
+maketweight       = 31,-30,44,24,195,-100,149,84
+conti_maketweight = 190,348,63,437,731,167
+layer_me          = 259,707,155
+layer_you         = 196,1013,168
+intersection      = 630,277,890,-418
+continuous        = 601
+core              = 202,46,160,123,87,-22
+
+[sec.bucket3]
+stdweight         = 0,-38,-2,0,30,99,0
+maketweight       = 212,81,26,87,270,-397,139,62
+conti_maketweight = 321,623,-69,1079,1572,276
+layer_me          = 437,1311,224
+layer_you         = 255,1913,232
+intersection      = 1459,764,1152,-606
+continuous        = 604
+core              = 317,228,192,210,180,131
