@@ -25,6 +25,10 @@
     <div class="brand">立体四目並べ</div>
     <div class="controls">
       <label class="ctl">
+        <span>モデル</span>
+        <select id="model"></select>
+      </label>
+      <label class="ctl">
         <span>難易度</span>
         <select id="profile"></select>
       </label>
@@ -36,9 +40,28 @@
           <option value="white">後手(白)</option>
         </select>
       </label>
+      <label class="ctl chk" title="AI を自動で指させず、白黒の両方を自分で並べて任意局面を解析します">
+        <input type="checkbox" id="research"> 研究モード
+      </label>
       <button id="newgame" class="primary">新規対局</button>
     </div>
   </header>
+
+  <!-- 評価値(将棋中継のように画面上部へ大きく出す) -->
+  <div id="evalhud" class="evalhud">
+    <div class="evalhud-head">
+      <span id="score" class="evalhud-score">—</span>
+      <span id="evalfresh" class="tag"></span>
+    </div>
+    <div class="evalhud-row">
+      <span id="wr-black" class="evalhud-wr">黒 50.0%</span>
+      <div class="evalhud-bar" title="黒から見た勝率">
+        <div id="winbar-black" class="winbar-black"></div>
+        <div class="winbar-mid"></div>
+      </div>
+      <span id="wr-white" class="evalhud-wr right">50.0% 白</span>
+    </div>
+  </div>
 
   <!-- 右パネル -->
   <aside id="panel">
@@ -55,22 +78,7 @@
     </section>
 
     <section class="card" id="evalcard">
-      <div class="card-title">
-        評価値
-        <span id="evalfresh" class="tag"></span>
-      </div>
-      <div class="winbar" title="黒から見た勝率">
-        <div id="winbar-black" class="winbar-black"></div>
-        <div class="winbar-mid"></div>
-      </div>
-      <div class="winbar-legend">
-        <span id="wr-black">黒 50.0%</span>
-        <span id="wr-white">50.0% 白</span>
-      </div>
-      <div class="row">
-        <span class="label">評価値(黒視点)</span>
-        <span id="score" class="value mono">—</span>
-      </div>
+      <div class="card-title">思考</div>
       <div class="row">
         <span class="label">思考時間</span>
         <span id="thinktime" class="value mono">—</span>
@@ -80,6 +88,54 @@
         <span id="nodes" class="value mono">—</span>
       </div>
       <p id="evalnote" class="note"></p>
+    </section>
+
+    <section class="card hidden" id="anacard">
+      <div class="card-title">解析<span id="anastate" class="tag"></span></div>
+      <div class="row">
+        <span class="label">開始手数</span>
+        <select id="ana-start" class="mini"></select>
+      </div>
+      <div class="row">
+        <span class="label">候補手</span>
+        <select id="ana-topk" class="mini"></select>
+      </div>
+      <div class="row">
+        <span class="label">1 反復の上限</span>
+        <select id="ana-limit" class="mini"></select>
+      </div>
+      <label class="toggle" title="残すと前の深さの結果を使い回すので速いですが、値は「N 手読みちょうど」ではなくなります">
+        <input type="checkbox" id="ana-fresh"> 毎回置換表をクリア(厳密・低速)
+      </label>
+      <div class="btnrow">
+        <button id="ana-run" class="primary">解析開始</button>
+        <button id="ana-stop">停止</button>
+      </div>
+      <p id="anawarn" class="note"></p>
+    </section>
+
+    <section class="card hidden" id="candcard">
+      <div class="card-title">候補手<span id="candply" class="tag"></span></div>
+      <ol id="candlist" class="cand"></ol>
+      <p id="candnote" class="note"></p>
+    </section>
+
+    <section class="card hidden" id="anahistcard">
+      <div class="card-title">深化の推移</div>
+      <table id="anatable" class="ana"></table>
+    </section>
+
+    <section class="card" id="schedcard">
+      <div class="card-title">
+        読み手数
+        <span id="schedhint" class="tag"></span>
+      </div>
+      <table id="schedtable" class="sched"></table>
+      <div class="btnrow">
+        <button id="sched-add">+ 行を追加</button>
+        <button id="sched-reset">プリセットに戻す</button>
+      </div>
+      <p id="schedwarn" class="note"></p>
     </section>
 
     <section class="card">

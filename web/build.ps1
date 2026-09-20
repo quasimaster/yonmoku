@@ -1,4 +1,4 @@
-# 立体四目並べ Web 版 WASM ビルドスクリプト
+﻿# 立体四目並べ Web 版 WASM ビルドスクリプト
 #   使い方: powershell -ExecutionPolicy Bypass -File web\build.ps1 [-EmsdkDir C:\emsdk] [-NoBench]
 #
 # 出力: web\yonmoku.js(ES module glue) と web\yonmoku.wasm
@@ -23,6 +23,19 @@ if ($null -eq $python) { throw "emsdk の python が見つかりません" }
 $pythonExe = Join-Path $python.FullName "python.exe"
 $env:EM_CONFIG = Join-Path $EmsdkDir ".emscripten"
 
+# --- --embed-file に必要な file_packager の .bat ラッパ ---
+#   em++ は tools\file_packager を拡張子なしで呼ぶので、Windows では .bat が要る
+#   無いと "file_packager ... failed: [WinError 2]" でリンクが落ちる (設計書 §12.2 と同種)
+#   ※ 本ファイルは UTF-8 BOM 付きで保存すること (BOM を外さないこと)
+#      BOM が無いと Windows PowerShell 5.1 は cp932 として読み、日本語が化けるうえ
+#      コメント行が「。」で終わると改行まで食われて次の行が丸ごと消える
+$fpBat = Join-Path $EmsdkDir "upstream\emscripten\tools\file_packager.bat"
+if (-not (Test-Path $fpBat)) {
+    $wrapper = "@echo off`r`n`"$pythonExe`" `"%~dp0file_packager.py`" %*`r`n"
+    Set-Content -Path $fpBat -Value $wrapper -Encoding ascii -NoNewline
+    Write-Host "created $fpBat" -ForegroundColor Yellow
+}
+
 # --- ビルドフラグ ---
 $defines = @(
     "-DUSE_ENDGAME_R2=1",              # 最終盤の段パリティ規則 R2
@@ -33,6 +46,18 @@ if (-not $NoBench) { $defines += "-DBENCH" }   # 探索ノード数の計測(実
 
 $flags = @(
     "-std=c++17", "-O3", "-msimd128",
+    # board.hpp の `b >> SIZE * SIZE + 1 & mask` は意図どおりの優先順位 (CLI ビルドでも同じ警告が出る)
+    # ここだけ黙らせる。他の警告は見えるように残す (-w は使わない)
+    "-Wno-shift-op-parentheses",
+    # ★core の evaluate_alpha_inc_tbl_w2.hpp (USE_EVALSEL=1) が SSE2 を要求する
+    #   付けると emcc が __SSE2__ を定義し <emmintrin.h> が wasm SIMD に写る
+    #   使えない環境では代わりに -DUSE_EVALSEL=0 (評価値は同一で速度だけ低下)
+    "-msse2",
+    # ★重みファイル。WASM はファイルを読めないので MEMFS に埋め込む (engine_api2.cpp の MODELS[])
+    #   ディレクトリごと埋め込むので、weights/ に .txt を足せば再ビルドだけで選べるようになる
+    #   (表示名とパスは engine_api2.cpp の MODELS[] に 1 行足すこと)
+    "--embed-file", "weights/alpha@/weights/alpha",
+    "--embed-file", "weights/core@/weights/core",
     "-sALLOW_MEMORY_GROWTH=1", "-sINITIAL_MEMORY=128MB", "-sMAXIMUM_MEMORY=512MB",
     "-sMODULARIZE=1", "-sEXPORT_ES6=1", "-sEXPORT_NAME=YonmokuModule",
     "-sENVIRONMENT=web,worker,node",
@@ -40,7 +65,8 @@ $flags = @(
     "-sEXPORTED_FUNCTIONS=@web/exports.json"
 )
 
-$src = "code/web/engine_api.cpp"
+# ★モデル選択 (alpha / core) + 読み手数スケジュール版 (engine_api2)
+$src = "code/web/engine_api2.cpp"
 $out = "web/yonmoku.js"
 
 Push-Location $repo

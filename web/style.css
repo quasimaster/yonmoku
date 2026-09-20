@@ -121,16 +121,50 @@ button.primary:hover { background: #6aabff; }
 }
 .tag.stale { background: #3a2f18; color: #d9a441; }
 
-/* 勝率バー */
-.winbar {
+/* ===== 評価値 HUD(画面上部) ===== */
+#evalhud {
+  position: absolute;
+  top: 50px; left: 0; right: 292px;   /* 右パネル(268 + 12 + 余白)を避ける */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  z-index: 9;
+  pointer-events: none;               /* 盤の操作を邪魔しない */
+  transition: opacity 200ms ease;
+}
+.evalhud-head { display: flex; align-items: baseline; gap: 10px; }
+.evalhud-score {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.1;
+  font-family: ui-monospace, Consolas, monospace;
+  letter-spacing: 0.01em;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.75);
+}
+.evalhud-row { display: flex; align-items: center; gap: 10px; width: min(560px, 90%); }
+.evalhud-bar {
   position: relative;
-  height: 10px;
-  border-radius: 5px;
+  flex: 1;
+  height: 14px;
+  border-radius: 7px;
   overflow: hidden;
   background: var(--white-stone);
   border: 1px solid var(--border);
-  margin-bottom: 5px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
 }
+.evalhud-wr {
+  font-size: 13px;
+  font-family: ui-monospace, Consolas, monospace;
+  color: var(--muted);
+  min-width: 76px;
+  white-space: nowrap;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
+}
+.evalhud-wr.right { text-align: right; }
+#evalhud.stale { opacity: 0.5; }
+#evalhud .tag { pointer-events: none; }
+
 .winbar-black {
   position: absolute;
   left: 0; top: 0; bottom: 0;
@@ -145,11 +179,33 @@ button.primary:hover { background: #6aabff; }
   background: var(--accent);
   opacity: 0.5;
 }
-.winbar-legend { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-bottom: 8px; }
-
-#evalcard.stale .winbar, #evalcard.stale .winbar-legend, #evalcard.stale #score { opacity: 0.45; }
+#evalcard.stale .value { opacity: 0.45; }
 
 .note { font-size: 11px; color: var(--muted); line-height: 1.5; margin: 8px 0 0; }
+.note.warn { color: #d9a441; }
+.note.err { color: var(--danger); }
+
+/* ===== 読み手数スケジュール ===== */
+.sched { width: 100%; border-collapse: collapse; font-size: 12px; }
+.sched td { padding: 3px 0; vertical-align: middle; }
+.sched td.unit { color: var(--muted); padding-left: 4px; white-space: nowrap; }
+.sched td.del { width: 24px; text-align: right; }
+.sched select {
+  font-size: 12px;
+  padding: 3px 4px;
+  border-radius: 5px;
+  width: 100%;
+}
+.sched .rowdel {
+  padding: 2px 6px;
+  font-size: 12px;
+  line-height: 1;
+  border-radius: 5px;
+  color: var(--muted);
+}
+.sched .rowdel:hover { color: var(--danger); border-color: var(--danger); }
+.sched tr.fixed select:first-child { opacity: 0.6; }
+#schedcard.busy { opacity: 0.5; pointer-events: none; }
 
 .toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 4px 0; cursor: pointer; }
 .toggle input { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; }
@@ -226,6 +282,47 @@ button.primary:hover { background: #6aabff; }
 .hidden { display: none !important; }
 
 /* ===== 狭い画面 ===== */
+/* ===== 研究モード ===== */
+.ctl.chk { gap: 6px; cursor: pointer; }
+.ctl.chk input { accent-color: var(--accent); width: 14px; height: 14px; cursor: pointer; }
+
+select.mini {
+  background: #171c24; color: var(--fg); border: 1px solid var(--border);
+  border-radius: 6px; padding: 3px 6px; font-size: 12px;
+}
+
+/* 候補手(1 位 = 金 / 2 位 = 銀 / 3 位 = 銅。盤面のリングと同じ色) */
+.cand { list-style: none; margin: 4px 0 0; padding: 0; }
+.cand li {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 5px 6px; border-radius: 6px; font-size: 12px;
+  border-left: 3px solid transparent;
+}
+.cand li:nth-child(1) { border-left-color: #e8c25a; background: rgba(232, 194, 90, 0.08); }
+.cand li:nth-child(2) { border-left-color: #b9c3cf; background: rgba(185, 195, 207, 0.06); }
+.cand li:nth-child(3) { border-left-color: #c98a55; background: rgba(201, 138, 85, 0.06); }
+.cand li:nth-child(n+4) { border-left-color: var(--border); }
+.cand .rank { color: var(--muted); width: 14px; flex: none; }
+.cand .mv { font-variant-numeric: tabular-nums; flex: none; }
+.cand .sc { margin-left: auto; font-variant-numeric: tabular-nums; }
+.cand .wr { color: var(--muted); width: 52px; text-align: right; flex: none; }
+
+/* 深化の推移 */
+.ana { width: 100%; border-collapse: collapse; font-size: 11px; }
+.ana th {
+  color: var(--muted); font-weight: 500; text-align: right; white-space: nowrap;
+  padding: 2px 4px; border-bottom: 1px solid var(--border);
+}
+.ana td { white-space: nowrap; }
+.ana th:first-child, .ana td:first-child { text-align: left; }
+.ana td { padding: 2px 4px; text-align: right; font-variant-numeric: tabular-nums; }
+.ana tr.latest td { color: var(--fg); background: rgba(79, 157, 255, 0.08); }
+.ana tr.partial td:first-child::after { content: ' ~'; color: #d9a441; }
+.ana td.flip { color: #d9a441; }   /* 前の反復から評価値の符号が反転した */
+
+/* 解析中は設定を触らせない */
+#anacard.busy .row, #anacard.busy .toggle { opacity: 0.45; pointer-events: none; }
+
 @media (max-width: 820px) {
   #panel {
     top: auto; bottom: 0; left: 0; right: 0;
@@ -240,7 +337,11 @@ button.primary:hover { background: #6aabff; }
     background: rgba(14, 17, 22, 0.9);
   }
   .card { min-width: 208px; flex: none; }
-  .thinking { bottom: auto; top: 58px; }
+  .thinking { bottom: auto; top: 128px; }
   .brand { display: none; }
   #topbar { padding: 8px 10px; }
+  /* 右パネルが下に回るので評価値 HUD は全幅に広げる */
+  #evalhud { right: 0; top: 76px; }
+  .evalhud-score { font-size: 24px; }
+  .evalhud-row { width: min(560px, 94%); }
 }
