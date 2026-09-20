@@ -6,6 +6,8 @@
 // 設計: docs/設計書/評価関数バージョン管理/implementation-plan-eval-weights-file.md §2.6
 //
 // 探索・評価・盤面・TT は main_alpha_pvs_eval_inc_tbl_id.cpp と完全に同一のものを include する。
+// 重みは weights/alpha/(version 1)と weights/core/(version 2。核の項 core 付き、main_core.cpp と同じ評価)の両方を受け付け、
+// 混在(alpha 対 core)の対戦もできる。
 // 両プレイヤーとも set_random(0)。棋譜のばらつきは「評価値が同点の最善手からの乱択」だけから生じる。
 //
 // ■ 使い方
@@ -17,6 +19,7 @@
 //              定跡 1 本につき A 先手 / B 先手の 2 局。総局数 = 並列数 × 周回数 × 定跡数 × 2。
 //
 //   例: match_weights weights/alpha/ver8_2.txt weights/alpha/ver8_2_5.txt hirate 10000 16 8
+//       match_weights weights/alpha/ver8_2_5.txt weights/core/ver1_0_core.txt hirate 10000 16 8
 //
 // ■ 乱数
 //   同点手の乱択は AI_RNG(ai_player_pvs_inc_id.hpp)経由で、スレッドごとの生成器 g_match_rng を使う。
@@ -47,12 +50,29 @@ inline thread_local mt19937 g_match_rng;
 #include "tt.hpp"
 #include "board_inc.hpp"
 #include "ai_player_pvs_inc_id.hpp"
-#include "evaluate_alpha_inc_tbl_w.hpp"
+#include "evaluate_core.hpp"                // evaluate_alpha_inc_tbl_w.hpp(EvalFn) + 核の項(EvalFnCore)
 #include <cerrno>
 #include <thread>
 #include <mutex>
 #include <atomic>
-using AI = AIPlayerPVSIncID<EvalFn>;
+
+// 重みは EvalWeightsCore で持つ(version 1 = weights/alpha/ も version 2 = weights/core/ も読める)。
+// core が 1 つでも非 0 のモデルは EvalFnCore、全部 0 のモデル(version 1 / builtin)は従来どおり EvalFn で評価する。
+// EvalFnCore は core = 0 でも評価値は EvalFn と同じだが、核の項の計算が葉ごとに入るので、
+// core 無しのモデルでは EvalFn を直接呼んで改修前と同じ速度・同じノード数に保つ。
+struct EvalFnMatch
+{
+	const EvalWeightsCore* w;
+	bool sec;    // false = 先手用エントリ / true = 後手用エントリ
+	bool core;   // w->has_core()
+
+	int operator()(const BoardInc &board, unsigned long long rMe, unsigned long long rYou, unsigned long long hand) const
+	{
+		if (core) return EvalFnCore{w, sec}(board, rMe, rYou, hand);
+		return EvalFn{&w->base, sec}(board, rMe, rYou, hand);
+	}
+};
+using AI = AIPlayerPVSIncID<EvalFnMatch>;
 
 #ifdef _WIN32
 // 出力は UTF-8。日本語 Windows のコンソール(cmd / PowerShell)は既定で CP932 として表示するため文字化けする。
@@ -141,9 +161,9 @@ static vector<vector<pair<int, int> > > load_openings(const string& rel_path)
 
 // 重みを用意する。"builtin" なら組み込み既定値、それ以外はファイルから読む。
 // 読めなければ組み込み既定値へ戻さずに終了する(設計書 §2.4)。
-static const EvalWeights* prepare(const char* spec, EvalWeights& slot)
+static const EvalWeightsCore* prepare(const char* spec, EvalWeightsCore& slot)
 {
-	if(string(spec) == "builtin") return &EvalWeights::builtin();
+	if(string(spec) == "builtin") return &EvalWeightsCore::builtin();
 	string err;
 	if(!slot.load(spec, &err)) { cerr << "weights error: " << err << endl; exit(1); }
 	return &slot;
@@ -170,8 +190,8 @@ struct Tally
 // スレッド間で共有する(A / B / level は読み取り専用。出力は mutex、進捗は atomic)
 struct Shared
 {
-	const EvalWeights* A = nullptr;
-	const EvalWeights* B = nullptr;
+	const EvalWeightsCore* A = nullptr;
+	const EvalWeightsCore* B = nullptr;
 	int level = 0;
 	long long total_games = 0;
 	mutex out_mtx;
@@ -181,13 +201,13 @@ struct Shared
 // 1 局打って t に加算し、1 行出力する。side 0: A 先手 / side 1: B 先手
 static void play_one(Shared& sh, Tally& t, int tid, const char* label, const vector<pair<int, int> >& book, int side)
 {
-	const EvalWeights* black = (side == 0) ? sh.A : sh.B;
-	const EvalWeights* white = (side == 0) ? sh.B : sh.A;
+	const EvalWeightsCore* black = (side == 0) ? sh.A : sh.B;
+	const EvalWeightsCore* white = (side == 0) ? sh.B : sh.A;
 
 	// 先手番は先手用エントリ(fir)、後手番は後手用エントリ(sec)を使う。
 	// これは既存の main / bench と同じ割り当てで、色に対応するものであってモデルの識別ではない。
-	AI p1(sh.level, EvalFn{black, false});
-	AI p2(sh.level, EvalFn{white, true });
+	AI p1(sh.level, EvalFnMatch{black, false, black->has_core()});
+	AI p2(sh.level, EvalFnMatch{white, true , white->has_core()});
 	p1.set_random(0);
 	p2.set_random(0);
 	Game game(&p1, &p2, false, book);
@@ -263,7 +283,7 @@ int main(int argc, char** argv)
 	init_sq_lines();
 	init_eval_tbl();
 
-	static EvalWeights slotA, slotB;
+	static EvalWeightsCore slotA, slotB;
 	Shared sh;
 	sh.A = prepare(argv[1], slotA);
 	sh.B = prepare(argv[2], slotB);
@@ -291,8 +311,13 @@ int main(int argc, char** argv)
 		sh.total_games = threads * count * (long long)openings.size() * 2;
 	}
 
-	printf("A = %s (%s)\n", sh.A->name.c_str(), argv[1]);
-	printf("B = %s (%s)\n", sh.B->name.c_str(), argv[2]);
+	// モデルの表示(開始時と集計の先頭の 2 か所で使う)
+	const auto print_models = [&]()
+	{
+		printf("A = %s (%s) core: %s\n", sh.A->base.name.c_str(), argv[1], sh.A->has_core() ? "on" : "off");
+		printf("B = %s (%s) core: %s\n", sh.B->base.name.c_str(), argv[2], sh.B->has_core() ? "on" : "off");
+	};
+	print_models();
 	if(hirate)
 		printf("config: mode=hirate total_games=%lld threads=%lld (per thread %lld..%lld) level=%lld\n",
 		       count, threads, games_of.back(), games_of.front(), level);
@@ -349,6 +374,7 @@ int main(int argc, char** argv)
 	const long long W = sum.win[0] + sum.win[1], L = sum.lose[0] + sum.lose[1], D = sum.draw[0] + sum.draw[1];
 	const long long N = W + L + D;
 	printf("--------\n");
+	print_models();
 	for(int tid = 0; tid < (int)threads; tid++)
 	{
 		const Tally& t = tally[tid];
@@ -357,7 +383,7 @@ int main(int argc, char** argv)
 	printf("A 先手: A勝 %lld / B勝 %lld / 分 %lld\n", sum.win[0], sum.lose[0], sum.draw[0]);
 	printf("B 先手: A勝 %lld / B勝 %lld / 分 %lld\n", sum.win[1], sum.lose[1], sum.draw[1]);
 	printf("合計  : A勝 %lld / B勝 %lld / 分 %lld  (%lld 局)\n", W, L, D, N);
-	if(N) printf("A の勝率(引分 0.5): %.2f %%\n", 100.0 * (W + 0.5 * D) / N);
+	if(N) printf("A (%s) の勝率(引分 0.5): %.2f %%\n", sh.A->base.name.c_str(), 100.0 * (W + 0.5 * D) / N);
 	printf("wall : %.3f sec\n", wall);
 	printf("total: %.3f sec (全局の対局時間の和)\n", sum.sec);
 	printf("nodes: %lld\n", sum.nodes);

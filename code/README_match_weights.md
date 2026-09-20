@@ -10,6 +10,15 @@
 探索・評価・盤面・置換表は、教師データ生成(`main_alpha_pvs_eval_inc_tbl_id_w.cpp`)と同じヘッダを使う。
 違うのは重みだけ。
 
+重みは次の 2 種類を受け付け、混ぜて対戦させることもできる(例: `weights/alpha/ver8_2_5.txt` 対 `weights/core/ver1_0_core.txt`)。
+
+| 重み | 形式 | 評価関数 |
+|---|---|---|
+| `weights/alpha/*.txt` / `builtin` | version 1 | 既存評価(`EvalFn`)。改修前の `match_weights` と棋譜・ノード数とも同一 |
+| `weights/core/*.txt` | version 2(`core` キー付き) | 既存評価 + 核 2 マスの項(`EvalFnCore`)。`main_core.cpp` と同じ評価 |
+
+どちらの評価を使うかはファイルの拡張子やフォルダではなく中身で決まる。`core` が 1 つでも非 0 なら core 付き、全部 0 なら既存評価。
+
 ## ビルド
 
 リポジトリ直下で実行する。
@@ -34,7 +43,7 @@ match_weights <A> <B> openings <1スレッドあたりの周回数> [並列数=1
 
 | 引数 | 内容 |
 |---|---|
-| `<A>` `<B>` | 重みファイルのパス(例: `weights/alpha/ver8_2.txt`)。`builtin` と書くと組み込み既定値(ver7.2 相当) |
+| `<A>` `<B>` | 重みファイルのパス(例: `weights/alpha/ver8_2.txt`、`weights/core/ver1_0_core.txt`)。`builtin` と書くと組み込み既定値(ver7.2 相当) |
 | `hirate` / `openings` | 対局の始め方(下記) |
 | `<総局数>` | hirate のとき。**偶数**で指定する |
 | `<1スレッドあたりの周回数>` | openings のとき。全定跡を何周するか |
@@ -85,8 +94,8 @@ match_weights <A> <B> openings <1スレッドあたりの周回数> [並列数=1
 実際の出力例(`hirate 16 8 3`)。
 
 ```
-A = ver8.2 (weights/alpha/ver8_2.txt)
-B = ver8.2.5 (weights/alpha/ver8_2_5.txt)
+A = ver8.2 (weights/alpha/ver8_2.txt) core: off
+B = ver8.2.5 (weights/alpha/ver8_2_5.txt) core: off
 config: mode=hirate total_games=16 threads=8 (per thread 2..2) level=3
         USE_ENDGAME_R2=1 USE_ENDGAME_CUT=1 seed=5489+thread
 [t04] hirate #     0 A-black: moves=25 A win     0.345 sec  nodes=     1072146  (1/16)
@@ -94,17 +103,21 @@ config: mode=hirate total_games=16 threads=8 (per thread 2..2) level=3
 [t03] hirate #     0 A-black: moves=57 A win    17.094 sec  nodes=    36243187  (3/16)
 ...
 --------
+A = ver8.2 (weights/alpha/ver8_2.txt) core: off
+B = ver8.2.5 (weights/alpha/ver8_2_5.txt) core: off
 [t00] A勝 1 / B勝 1 / 分 0
 [t01] A勝 1 / B勝 1 / 分 0
 ...
 A 先手: A勝 4 / B勝 4 / 分 0
 B 先手: A勝 5 / B勝 3 / 分 0
 合計  : A勝 9 / B勝 7 / 分 0  (16 局)
-A の勝率(引分 0.5): 56.25 %
+A (ver8.2) の勝率(引分 0.5): 56.25 %
 wall : 506.961 sec
 total: 1396.185 sec (全局の対局時間の和)
 nodes: 3231007492
 ```
+
+先頭 2 行の `core: on` / `off` は、そのモデルが核 2 マスの項を使っているか(`core` が 1 つでも非 0 か)。
 
 ### 1 局ごとの行
 
@@ -125,9 +138,10 @@ nodes: 3231007492
 
 | 行 | 意味 |
 |---|---|
+| `A =` / `B =` | A と B のモデル(開始時と同じ表示)。ログの末尾だけ見ても、どのモデル同士の結果か分かるようにしている |
 | `[tNN] A勝 / B勝 / 分` | スレッドごとの結果 |
 | `A 先手:` / `B 先手:` | 手番別の結果。先手有利の偏りを見る |
-| `合計` / `A の勝率` | 全体の結果。勝率は引分を 0.5 勝として計算 |
+| `合計` / `A (モデル名) の勝率` | 全体の結果。勝率は引分を 0.5 勝として計算 |
 | `wall` | 実際にかかった時間 |
 | `total` | 全局の対局時間の合計(並列なので wall より大きい) |
 
