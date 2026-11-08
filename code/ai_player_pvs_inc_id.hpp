@@ -1,3 +1,21 @@
+// =============================================================================
+//  ai_player_pvs_inc_id.hpp(コメント付き)
+//  解説: c109-gijutsushoten/explanation/ の解説 tex
+//
+//  現行の探索 AI AIPlayerPVSIncID<F>(main_alpha_pvs_eval_inc_tbl_id*.cpp、main_core.cpp、match_weights.cpp、Web 版などが使う)。
+//  ai_player.hpp の αβ探索に、次の高速化を足したものである。
+//    - 置換表(tt.hpp)        : 調べた局面の値と最善手を覚えて再利用する
+//    - BoardInc(board_inc.hpp): ラインごとの石数を差分更新し、評価関数を速くする
+//    - 手の並べ替え          : 置換表の最善手 → killer(同じ深さで β カットを起こした手)→ history の順に読む
+//    - PVS(Principal Variation Search): 最初の手だけ広い窓で読み、残りは幅 1 の窓(null window)で
+//                              「最善手より良いか」だけを確かめる。良かったときだけ読み直す
+//    - 反復深化(iterative deepening): 根(root)で読みの深さを 2手ずつ深め、浅い読みの結果で手を並べ替える
+//    - 最終盤(USE_ENDGAME_CUT / USE_ENDGAME_UNIVERSAL): 残りが少ない局面を endgame_exact.hpp /
+//                              endgame_universal.hpp で判定し、探索を打ち切る(既定はどちらも 0 = 使わない)
+//  探索の値は手番側から見た点数(ネガマックス法)。勝ちは INF - 手数、負けは -(INF - 手数)。
+//
+//  ★元のコードからの変更は、先手を白・後手を黒とする色の名前の入れ替え(enum Color など)と、コメントの追加だけである。
+// =============================================================================
 #pragma once
 
 #include <climits>
@@ -105,11 +123,18 @@ inline thread_local long long g_eg_check_count = 0;   // 照合した打ち切�
 // 提案1後半(反復深化)版。ai_player_pvs_inc.hpp の AIPlayerPVSInc のコピーで、
 // struct を AIPlayerPVSIncID に改名し、root(move())にのみ反復深化を実装したもの。
 //   - evaluate_board(内部ノード)/ update_cut / メンバは流用元と完全同一(無変更)
-//   - move() は「読み手数 N = 4, 6, …, level を 2 手ずつ深める」反復深化に置換
+//   - move() は「読み手数 N = 4, 6, …, level を 2手ずつ深める」反復深化に置換
 //     (§1.3: 評価関数の偶数手読み前提を厳守。evaluate_board 深さ d = N-1)
 //   - 反復間で tt.new_search() を呼ばず、浅い反復の TT を深い反復が再利用(§1.2)
 //   - USE_ID=0 で現行 ai_player_pvs_inc.hpp と完全同一挙動になる
 // 評価関数 F は int(*)(const BoardInc&, ull, ull, ull)(evaluate_alpha_inc.hpp の _ri 版)
+// -----------------------------------------------------------------------------
+// AIPlayerPVSIncID<F>: F は評価関数。evaluate_func(BoardInc, rMe_raw, rYou_raw, hand) の形で呼ぶ
+// (evaluate_alpha_inc_tbl*.hpp の _rit、EvalFn、EvalFnCore など)。
+//   tt      : この AI 専用の置換表(スレッド間・プレイヤー間で共有しない)
+//   killer  : 深さ(ply)ごとに、β カットを起こした手を 2つまで覚える
+//   history : マスごとに、β カットを起こした回数を深さの 2乗で重み付けして足したもの
+// -----------------------------------------------------------------------------
 template<typename F>
 struct AIPlayerPVSIncID : Player
 {
@@ -133,6 +158,16 @@ struct AIPlayerPVSIncID : Player
 		history[sq] = min(history[sq] + level * level, 1 << 28);   // 飽和(手番リセット前の桁あふれ保険)
 	}
 
+	// -------------------------------------------------------------------------
+	// evaluate_board: 探索の本体。手番側から見た局面の値を返す。
+	//   level: 残りの深さ、[alpha, beta]: 窓、ply: 根からの深さ(killer の添字)。
+	//   [1] 置換表を引く。十分深い結果があれば、その値で返すか窓を狭める。最善手は並べ替えに使う。
+	//   決勝点の処理: 自分の決勝点に置ければ勝ち。相手の決勝点があればそこをふさぐ手だけを読む。
+	//       相手の決勝点の真下には置かない。どちらの決勝点も無く level <= 0 なら評価関数の値を返す(葉)。
+	//   [2] 葉の値も深さ 0 として置換表に入れる。
+	//   [3] 置換表の最善手を最初に読み、残りの手を並べ替えて PVS で読む。
+	//   [4] 結果を置換表に入れる(上限 / 下限 / 正確な値を区別する)。
+	// -------------------------------------------------------------------------
 	int evaluate_board(const BoardInc &board, int level, int alpha, int beta, int ply)
 	{
 #ifdef BENCH
@@ -188,8 +223,8 @@ struct AIPlayerPVSIncID : Player
 				else
 				{
 					// ここに来た時点で hand & rMe_raw == 0 かつ hand & rYou_raw == 0。
-					// = 「即座に置けるマスの上には双方どちらのリーチも無い」= 研究の制約(C)。
-					// 制約(C) が成立する唯一の位置なので、厳密打ち切りの挿入点もここ 1 点に限られる。
+					// = 「即座に置けるマスの上には双方どちらの決勝点も無い」= 研究の制約(C)。
+					// 制約(C) が成立する唯一の位置なので、厳密打ち切りの挿入点もここ 1点に限られる。
 #if USE_ENDGAME_CUT
 					if (turn >= 59)
 					{
@@ -346,7 +381,7 @@ struct AIPlayerPVSIncID : Player
 			// [A] 残りの合法手をスコア付きで固定長配列に収集(提案4のまま)
 			array<pair<int, unsigned long long>, 16> moves;
 			int n = 0;
-			int group = 2;                                   // 静的 move_order のグループボーナス(核=2, 中=1, 1段目=0)
+			int group = 2;                                   // 静的 move_order のグループボーナス(コア=2, 中=1, 1段目=0)
 			for (const unsigned long long mask : move_order)
 			{
 				unsigned long long h = hand & mask;
@@ -405,6 +440,14 @@ struct AIPlayerPVSIncID : Player
 		return alpha;
 	}
 
+	// -------------------------------------------------------------------------
+	// move: 盤面 board で指す手(柱 (x, y))を返す。
+	//   1. 自分の決勝点に置けるなら、すぐそこに置く。相手の決勝点があるなら、候補をそこだけにする。
+	//   2. random(%)の確率でランダムな手を指す(候補は 1 で絞った後の手から選ぶ)。
+	//   3. 根で反復深化する。最後の深さ d_target は YON_DEPTH_TARGET(turn, level) で決まる
+	//      (既定: 35手目以降は 27、27手目以降は 11、19手目以降は 9、それより前は level - 1)。
+	//   4. 最善の値の手が複数あれば、その中から乱数で 1つ選ぶ。最善の値は game の評価値の記録に書き込む。
+	// -------------------------------------------------------------------------
 	pair<int, int> move(Board board) override
 	{
 		tt.new_search();   // 世代更新(表クリアはしない。前の手の結果は上書きされるまで再利用される)
@@ -427,9 +470,9 @@ struct AIPlayerPVSIncID : Player
 			if (r) hand = r;
 		}
 
-		// ランダム手も相手リーチ阻止後の hand から選ぶ(案①)。
-		// 相手リーチがあれば hand は阻止手に絞られているため即死を避けられる。
-		// 相手リーチが無ければ hand は全合法手のままで従来と同一挙動。
+		// ランダム手も相手決勝点阻止後の hand から選ぶ(案①)。
+		// 相手決勝点があれば hand は阻止手に絞られているため即死を避けられる。
+		// 相手決勝点が無ければ hand は全合法手のままで従来と同一挙動。
 		if (random && AI_RNG() % 100 < random) return move_random_hand(hand);
 
 		unsigned long long mv = 0uLL;
@@ -463,7 +506,7 @@ struct AIPlayerPVSIncID : Player
 			}
 		}
 
-		// 深さ d を 2 手ずつ深化し、最終反復で必ず d_target に着地させる。
+		// 深さ d を 2手ずつ深化し、最終反復で必ず d_target に着地させる。
 		// 開始 d は d_target とパリティを合わせる(通常は d=3=旧4手読み。d_target が偶数なら d=4 から)。
 		// これにより浅い反復の TT ウォームアップを効かせつつ、最終 d を原本と一致させる。
 		int d_start = (((d_target - 3) & 1) == 0) ? 3 : 4;
@@ -559,6 +602,7 @@ struct AIPlayerPVSIncID : Player
 #endif
 
 		enum Color now = board.validate();
+		// 評価値を記録する。turn が偶数なら黒(後手)の手番、奇数なら白(先手)の手番。
 		if(turn % 2 == 0)
 		{
 			game->evaluatessec_tmp[turn / 2] = mx;
@@ -569,7 +613,7 @@ struct AIPlayerPVSIncID : Player
 		}
 		if (verbose)
 		{
-			if (now == Color::Black) cout<<"\033[31m";
+			if (now == Color::White) cout<<"\033[31m";
 			cout << "score = " << mx << " by";
 			for (int xyz = 0; xyz < BOARD_SIZE; xyz++) if (mv & 1uLL << xyz)
 			{
@@ -577,7 +621,7 @@ struct AIPlayerPVSIncID : Player
 			}
 			cout << endl;
 			cout << "win : " << 100 / (1 + exp((double)-mx / 400)) << " %";
-			if (now == Color::Black) cout<<"\033[m";
+			if (now == Color::White) cout<<"\033[m";
 			cout<<endl;
 		}
 		assert(mv);

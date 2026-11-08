@@ -1,3 +1,12 @@
+// =============================================================================
+//  tt2.hpp(コメント付き)
+//  解説: c109-gijutsushoten/explanation/ の解説 tex
+//
+//  置換表 tt.hpp の高速化版 TranspositionTable2。ai_player_pvs_inc_id2.hpp が使う。
+//  エントリの形(TTEntry)とキーの作り方(hash)は tt.hpp のものをそのまま使う。
+//
+//  ★元のコードからの変更は、先手を白・後手を黒とする色の名前の入れ替え(enum Color など)と、コメントの追加だけである。
+// =============================================================================
 #pragma once
 
 #include <memory>
@@ -6,18 +15,18 @@
 #include "tt.hpp"   // TTEntry / TTBound / TT_NO_MOVE / TT_EMPTY / g_node_count / TranspositionTable::hash(無変更で流用)
 
 // tt.hpp の高速化版(設計: docs/設計書/高速化/speedup-proposal-main-core.md §9.5)。
-// エントリ構造(16 B)・総エントリ数・ハッシュ・世代管理は流用元と同一で、差分は次の 2 点。
+// エントリ構造(16 B)・総エントリ数・ハッシュ・世代管理は流用元と同一で、差分は次の 2点。
 //
 //   USE_TT_BUCKET = N(既定 4): 隣接 N エントリを 1 バケットにする(4 × 16 B = 64 B = 1 キャッシュライン)。
 //       probe はバケット内を順に見る。store は「空き or 同一局面」があればそこへ、無ければ
 //       「旧世代を優先、同世代なら最も浅いもの」を追い出して【必ず】格納する。
 //       ※ 流用元の 1 way は別局面なら無条件に上書きするので、深い結果が浅い葉の格納で消える。
 //       ※ 「同世代の深いエントリより浅ければ格納しない」規則は重い局で逆効果になる(設計書 §9.4)。採らない。
-//       ※ 置換表の中身が変わるので探索ノード数は変わる。root 評価値・最善手集合は実測 606 手番で不変だったが、保証は無い。
+//       ※ 置換表の中身が変わるので探索ノード数は変わる。root 評価値・最善手集合は実測 606手番で不変だったが、保証は無い。
 //   USE_TT_BUCKET = 1: 流用元と完全同一の probe / store(A/B 用)。
 //
 //   表は 64 B 境界に揃えて確保する(std::vector では揃わない)。また流用元は「値初期化で 64 MB をゼロ埋め → bound を全走査」と
-//   2 回書いていたのを、new TTEntry[](トリビアル型なので未初期化)+ bound だけの 1 回書きにした(設計書 §4.5)。
+//   2回書いていたのを、new TTEntry[](トリビアル型なので未初期化)+ bound だけの 1回書きにした(設計書 §4.5)。
 #ifndef USE_TT_BUCKET
 #define USE_TT_BUCKET 4
 #endif
@@ -27,7 +36,7 @@ static_assert(USE_TT_BUCKET == 1 || USE_TT_BUCKET == 2 || USE_TT_BUCKET == 4 || 
 struct TranspositionTable2
 {
 	std::unique_ptr<TTEntry[]> storage;   // 64 B 揃え用に 4 エントリ余分に確保
-	TTEntry* table;
+	TTEntry* table;                       // storage の中で 64 B 境界に揃えた先頭
 	unsigned long long mask;
 	unsigned char generation = 0;
 	static constexpr unsigned long long BK = USE_TT_BUCKET;
@@ -35,6 +44,7 @@ struct TranspositionTable2
 	explicit TranspositionTable2(int bits = 22)   // 2^22 entry = 64MB
 		: storage(new TTEntry[(1uLL << bits) + 4]), mask((1uLL << bits) - 1)
 	{
+		// 先頭アドレスを 64 の倍数に切り上げる(+63 して下位 6 bit を 0 にする)。
 		uintptr_t p = (uintptr_t)storage.get();
 		p = (p + 63) & ~(uintptr_t)63;
 		table = (TTEntry*)p;
@@ -47,6 +57,7 @@ struct TranspositionTable2
 	void new_search() { generation++; }   // move() 毎に呼ぶ(表クリア不要)
 
 #if USE_TT_BUCKET > 1
+	// バケットの先頭は key & mask の下位ビットを 0 にした位置。バケット内の BK 個を順に調べる。
 	const TTEntry* probe(unsigned long long key) const
 	{
 		const TTEntry* e = &table[key & mask & ~(BK - 1)];
@@ -67,6 +78,7 @@ struct TranspositionTable2
 			t = &e[0];
 			for (unsigned long long k = 1; k < BK; k++)
 			{
+				// oldt / oldk: 候補 t / e[k] が古い世代か。古い世代を優先し、世代が同じなら浅い方を選ぶ。
 				const bool oldt = t->age != generation, oldk = e[k].age != generation;
 				if (oldk != oldt) { if (oldk) t = &e[k]; }
 				else if (e[k].depth < t->depth) t = &e[k];

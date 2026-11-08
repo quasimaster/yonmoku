@@ -1,3 +1,14 @@
+// =============================================================================
+//  ai_player_pvs_inc_id2.hpp(コメント付き)
+//  解説: c109-gijutsushoten/explanation/ の解説 tex
+//
+//  ai_player_pvs_inc_id.hpp の高速化版 AIPlayerPVSIncID2<F>(main_core2.cpp、bench_core2.cpp、Web 版 engine_api2.cpp が使う)。
+//  探索の考え方(αβ、PVS、killer / history、反復深化、最終盤の打ち切り)は ai_player_pvs_inc_id.hpp と同じ。
+//  違いは盤面 BoardInc2(board_inc2.hpp)、置換表 TranspositionTable2(tt2.hpp)、
+//  手の並べ替えを「全部並べる」から「必要な分だけ最大を選ぶ」(USE_LAZYSORT)に変えた点である。
+//
+//  ★元のコードからの変更は、先手を白・後手を黒とする色の名前の入れ替え(enum Color など)と、コメントの追加だけである。
+// =============================================================================
 #pragma once
 
 #include <climits>
@@ -8,7 +19,7 @@
 #include "board_inc2.hpp"   // ★BoardInc2(cnt 向き固定)
 
 // ★ai_player_pvs_inc_id.hpp の高速化版(設計: docs/設計書/高速化/speedup-proposal-main-core.md §4.2 / §4.3 / §9.5)。
-//   流用元との差分は次の 4 点だけ。探索アルゴリズム(αβ/PVS/killer/history/反復深化/最終盤打ち切り)は同一。
+//   流用元との差分は次の 4点だけ。探索アルゴリズム(αβ/PVS/killer/history/反復深化/最終盤打ち切り)は同一。
 //   1. BoardInc → BoardInc2、TranspositionTable → TranspositionTable2(いずれも別ヘッダで切替可能)
 //   2. [A]/[B]: USE_LAZYSORT=1 で「(score, bit) の std::sort」を「u64 キー(score<<6|sq)の遅延選択」に置換。
 //      並び順は pair(score,bit) の降順と同一(キーは sq を含むので全て異なる)。βカットで早く抜けるほどソート分が浮く。
@@ -117,11 +128,14 @@ inline thread_local long long g_eg_check_count = 0;   // 照合した打ち切�
 // 提案1後半(反復深化)版。ai_player_pvs_inc.hpp の AIPlayerPVSInc のコピーで、
 // struct を AIPlayerPVSIncID に改名し、root(move())にのみ反復深化を実装したもの。
 //   - evaluate_board(内部ノード)/ update_cut / メンバは流用元と完全同一(無変更)
-//   - move() は「読み手数 N = 4, 6, …, level を 2 手ずつ深める」反復深化に置換
+//   - move() は「読み手数 N = 4, 6, …, level を 2手ずつ深める」反復深化に置換
 //     (§1.3: 評価関数の偶数手読み前提を厳守。evaluate_board 深さ d = N-1)
 //   - 反復間で tt.new_search() を呼ばず、浅い反復の TT を深い反復が再利用(§1.2)
 //   - USE_ID=0 で現行 ai_player_pvs_inc.hpp と完全同一挙動になる
 // 評価関数 F は int(*)(const BoardInc&, ull, ull, ull)(evaluate_alpha_inc.hpp の _ri 版)
+// -----------------------------------------------------------------------------
+// AIPlayerPVSIncID2<F>: F は評価関数(EvalFnCore2 など)。メンバの意味は AIPlayerPVSIncID と同じ。
+// -----------------------------------------------------------------------------
 template<typename F>
 struct AIPlayerPVSIncID2 : Player
 {
@@ -145,6 +159,10 @@ struct AIPlayerPVSIncID2 : Player
 		history[sq] = min(history[sq] + level * level, 1 << 28);   // 飽和(手番リセット前の桁あふれ保険)
 	}
 
+	// -------------------------------------------------------------------------
+	// evaluate_board: 探索の本体。処理の順番は ai_player_pvs_inc_id.hpp の evaluate_board と同じ。
+	//   [1] 置換表 → 決勝点の処理 → [2] 葉 → [3] 置換表の最善手、残りの手を並べ替えて PVS → [4] 置換表へ格納。
+	// -------------------------------------------------------------------------
 	int evaluate_board(const BoardInc2 &board, int level, int alpha, int beta, int ply)
 	{
 #ifdef BENCH
@@ -200,8 +218,8 @@ struct AIPlayerPVSIncID2 : Player
 				else
 				{
 					// ここに来た時点で hand & rMe_raw == 0 かつ hand & rYou_raw == 0。
-					// = 「即座に置けるマスの上には双方どちらのリーチも無い」= 研究の制約(C)。
-					// 制約(C) が成立する唯一の位置なので、厳密打ち切りの挿入点もここ 1 点に限られる。
+					// = 「即座に置けるマスの上には双方どちらの決勝点も無い」= 研究の制約(C)。
+					// 制約(C) が成立する唯一の位置なので、厳密打ち切りの挿入点もここ 1点に限られる。
 #if USE_ENDGAME_CUT
 					if (turn >= 59)
 					{
@@ -360,7 +378,7 @@ struct AIPlayerPVSIncID2 : Player
 			//   pair(score, bit) の降順 == (score 降順、同点なら sq 降順) == キーの降順。score は非負・31 bit 以内。
 			unsigned long long keys[16];
 			int n = 0;
-			int group = 2;                                   // 静的 move_order のグループボーナス(核=2, 中=1, 1段目=0)
+			int group = 2;                                   // 静的 move_order のグループボーナス(コア=2, 中=1, 1段目=0)
 			for (const unsigned long long mask : move_order)
 			{
 				unsigned long long h = hand & mask;
@@ -378,7 +396,7 @@ struct AIPlayerPVSIncID2 : Player
 				group--;
 			}
 
-			// ★[B'] 探索本体。ソートせず、各反復で「残りの最大キー」を先頭へ持ってくる(選択ソートの 1 段)。
+			// ★[B'] 探索本体。ソートせず、各反復で「残りの最大キー」を先頭へ持ってくる(選択ソートの 1段)。
 			//   探索順は [A]+std::sort と同一。βカットで抜ければ残りの比較はしない。
 			for (int i = 0; i < n; i++)
 			{
@@ -414,7 +432,7 @@ struct AIPlayerPVSIncID2 : Player
 			// [A] 残りの合法手をスコア付きで固定長配列に収集(提案4のまま)
 			array<pair<int, unsigned long long>, 16> moves;
 			int n = 0;
-			int group = 2;                                   // 静的 move_order のグループボーナス(核=2, 中=1, 1段目=0)
+			int group = 2;                                   // 静的 move_order のグループボーナス(コア=2, 中=1, 1段目=0)
 			for (const unsigned long long mask : move_order)
 			{
 				unsigned long long h = hand & mask;
@@ -474,6 +492,9 @@ struct AIPlayerPVSIncID2 : Player
 		return alpha;
 	}
 
+	// -------------------------------------------------------------------------
+	// move: 盤面 board で指す手(柱 (x, y))を返す。処理は ai_player_pvs_inc_id.hpp の move と同じ(根で反復深化)。
+	// -------------------------------------------------------------------------
 	pair<int, int> move(Board board) override
 	{
 		tt.new_search();   // 世代更新(表クリアはしない。前の手の結果は上書きされるまで再利用される)
@@ -496,9 +517,9 @@ struct AIPlayerPVSIncID2 : Player
 			if (r) hand = r;
 		}
 
-		// ランダム手も相手リーチ阻止後の hand から選ぶ(案①)。
-		// 相手リーチがあれば hand は阻止手に絞られているため即死を避けられる。
-		// 相手リーチが無ければ hand は全合法手のままで従来と同一挙動。
+		// ランダム手も相手決勝点阻止後の hand から選ぶ(案①)。
+		// 相手決勝点があれば hand は阻止手に絞られているため即死を避けられる。
+		// 相手決勝点が無ければ hand は全合法手のままで従来と同一挙動。
 		if (random && AI_RNG() % 100 < random) return move_random_hand(hand);
 
 		unsigned long long mv = 0uLL;
@@ -532,7 +553,7 @@ struct AIPlayerPVSIncID2 : Player
 			}
 		}
 
-		// 深さ d を 2 手ずつ深化し、最終反復で必ず d_target に着地させる。
+		// 深さ d を 2手ずつ深化し、最終反復で必ず d_target に着地させる。
 		// 開始 d は d_target とパリティを合わせる(通常は d=3=旧4手読み。d_target が偶数なら d=4 から)。
 		// これにより浅い反復の TT ウォームアップを効かせつつ、最終 d を原本と一致させる。
 		int d_start = (((d_target - 3) & 1) == 0) ? 3 : 4;
@@ -628,6 +649,7 @@ struct AIPlayerPVSIncID2 : Player
 #endif
 
 		enum Color now = board.validate();
+		// 評価値を記録する。turn が偶数なら黒(後手)の手番、奇数なら白(先手)の手番。
 		if(turn % 2 == 0)
 		{
 			game->evaluatessec_tmp[turn / 2] = mx;
@@ -638,7 +660,7 @@ struct AIPlayerPVSIncID2 : Player
 		}
 		if (verbose)
 		{
-			if (now == Color::Black) cout<<"\033[31m";
+			if (now == Color::White) cout<<"\033[31m";
 			cout << "score = " << mx << " by";
 			for (int xyz = 0; xyz < BOARD_SIZE; xyz++) if (mv & 1uLL << xyz)
 			{
@@ -646,7 +668,7 @@ struct AIPlayerPVSIncID2 : Player
 			}
 			cout << endl;
 			cout << "win : " << 100 / (1 + exp((double)-mx / 400)) << " %";
-			if (now == Color::Black) cout<<"\033[m";
+			if (now == Color::White) cout<<"\033[m";
 			cout<<endl;
 		}
 		assert(mv);

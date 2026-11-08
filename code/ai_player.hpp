@@ -1,7 +1,25 @@
+// =============================================================================
+//  ai_player.hpp(コメント付き)
+//  解説: c109-gijutsushoten/explanation/ の解説 tex
+//
+//  最初の世代の AI(main.cpp、main_alpha.cpp が使う)。
+//    AIPlayer<F>         : αβ探索(alpha-beta search)で手を選ぶ AI。F は評価関数(Board を受け取り int を返す)。
+//    AIPlayer_minimax<F> : 枝刈りをしない全幅探索(read_DFS)で手を選ぶ AI。
+//  評価値は「手番側から見た点数」で、子局面の値に - を付けて親の値にする(ネガマックス法)。
+//  勝ちは INF - (手数)のように、早く勝つほど大きな値で表す。
+//
+//  ★元のコードからの変更は、先手を白・後手を黒とする色の名前の入れ替え(enum Color など)と、コメントの追加だけである。
+// =============================================================================
 #pragma once
 
 #include "game.hpp"
 
+// -----------------------------------------------------------------------------
+// read_DFS: 残り level手まで全部の手を読む全幅探索(枝刈りなし)。
+//   戻り値: (最善手の集合のビット, その評価値)。
+//   自分の決勝点に置ければ即勝ち(INF)。相手の決勝点があれば、そこをふさぐ手だけを読む。
+//   勝ち・負けの値は 1手深くなるごとに 1 だけ 0 に近づける(早く勝つ手、遅く負ける手を選ぶため)。
+// -----------------------------------------------------------------------------
 template<typename F>
 pair<unsigned long long, int> read_DFS(Board board, int level, const F& evaluate_func)
 {
@@ -42,6 +60,12 @@ pair<unsigned long long, int> read_DFS(Board board, int level, const F& evaluate
 }
 
 template<typename F>
+// -----------------------------------------------------------------------------
+// AIPlayer<F>: αβ探索の AI。
+//   level         : 読みの深さ(何手先まで読むか)
+//   evaluate_func : 葉の局面で呼ぶ評価関数
+//   game          : 対局(探索した評価値を game->evaluates{fir,sec}_tmp に記録する。教師データ用)
+// -----------------------------------------------------------------------------
 struct AIPlayer : Player
 {
 	using Player::verbose;
@@ -54,6 +78,15 @@ struct AIPlayer : Player
 	void set_game(Game* g) { game = g; }
 
 	//int evaluate_board(Board board, int level, int alpha, int beta)
+	// -------------------------------------------------------------------------
+	// evaluate_board: αβ探索の本体。手番側から見た局面の値を返す(窓 [alpha, beta])。
+	//   1. 自分の決勝点に置ける → 勝ち(INF - 手数)。
+	//   2. 相手の決勝点がある → そこをふさぐ手だけを読む。相手の決勝点が無く level <= 0 なら評価関数の値を返す。
+	//      また、相手の決勝点の真下には置かない(置くと相手がその上に置いて勝つ)。置ける手が無ければ負け。
+	//   3. 深い探索(level >= 8 かつ turn < 46、または level >= 10)では、まず各手を 3手だけ読んで並べ替え、
+	//      良さそうな手から読む(並べ替えるほど αβ の枝刈りがよく効く)。
+	//      それ以外では common.hpp の move_order(コアとコーナー → 1段目以外 → 1段目)の順に読む。
+	// -------------------------------------------------------------------------
 	int evaluate_board(Board board, int level, int alpha, int beta)
 	{
 		unsigned long long hand = board.valid_move();
@@ -146,6 +179,15 @@ struct AIPlayer : Player
 		return alpha;
 	}
 
+	// -------------------------------------------------------------------------
+	// move: 盤面 board で指す手(柱 (x, y))を返す。
+	//   1. 自分の決勝点に置けるなら、すぐそこに置く。
+	//   2. 相手の決勝点があるなら、候補をそこだけにする。
+	//   3. random(%)の確率でランダムな手を指す(自己対戦の棋譜をばらつかせるため)。
+	//   4. 各手を 3手読んで並べ替えてから、手数に応じた深さで読む(終盤ほど深く読む)。
+	//   5. 最善の値の手が複数あれば、その中から乱数で 1つ選ぶ。
+	//   探索した最善の値 mx は、教師データとして game の評価値の記録に書き込む。
+	// -------------------------------------------------------------------------
 	pair<int, int> move(Board board) override
 	{
 		unsigned long long hand = board.valid_move();
@@ -217,6 +259,8 @@ struct AIPlayer : Player
 				//int ev = -evaluate_board(b,turn>=44?16::level - 1, -INF , -mx + 1);//教師データ用ver3
                 //int ev = -evaluate_board(b,turn>=43?17:turn>=35?9:level - 1, -INF , -mx + 1);//教師データ用ver4,シグモイド関数の係数は920
 				// int ev = -evaluate_board(b,turn>=40?21:turn>=33?11:turn>=25?9:level - 1, -INF , -mx + 1);//教師データ用ver5,シグモイド関数の係数は1840
+				// 読む深さ: 39手目以降は 22手(ほぼ終局まで読み切る)、31手目以降は 11手、23手目以降は 9手、それより前は level - 1手。
+				// 窓を (-INF, -mx + 1) にして、今までの最善 mx 以上かどうかだけを調べる(同点の手も最善手として集める)。
 				int ev = -evaluate_board(b,turn>=39?22:turn>=31?11:turn>=23?9:level - 1, -INF , -mx + 1);//教師データ用ver6,シグモイド関数の係数は1840
 				// int ev = -evaluate_board(b,turn>=37?24:turn>=29?11:turn>=21?9:level - 1, -INF , -mx + 1);//教師データ用ver7,シグモイド関数の係数は1840
                 //int ev = -evaluate_board(b, turn>=39?21:turn>=37?12:turn>=29?10:level - 1, -INF , -mx + 1);//この行で途中からの読み手数を変更できる
@@ -231,6 +275,8 @@ struct AIPlayer : Player
 		//const int turn = board.turn();// turn number (the number of stones = turn - 1)
 		//auto[mv, ev] = read_DFS(board, turn >= 40 ? level : level, evaluate_func);
 		enum Color now = board.validate();
+		// 評価値を記録する。turn が偶数なら黒(後手)の手番で、後手の turn / 2手目。
+		// 奇数なら白(先手)の手番で、先手の (turn + 1) / 2手目。
 		if(turn % 2 == 0)
 		{
 			//evaluatessec[game_count][turn >> 1] = mx;
@@ -244,15 +290,16 @@ struct AIPlayer : Player
 		}
 		if (verbose)
 		{
-			if (now == Color::Black) cout<<"\033[31m";
+			if (now == Color::White) cout<<"\033[31m";
 			cout << "score = " << mx << " by";
 			for (int xyz = 0; xyz < BOARD_SIZE; xyz++) if (mv & 1uLL << xyz)
 			{
 				cout << " (" << X(xyz) + 1 << ", " << Y(xyz) + 1 << ", " << Z(xyz) + 1 << "),";
 			}
 			cout << endl;
+			// 勝率の目安: シグモイド関数 100 / (1 + e^(-mx / 400)) [%]。
 			cout << "win : " << 100 / (1 + exp((double)-mx / 400)) << " %";
-			if (now == Color::Black) cout<<"\033[m";
+			if (now == Color::White) cout<<"\033[m";
 			cout<<endl;
 		}
 		assert(mv);
@@ -265,6 +312,9 @@ struct AIPlayer : Player
 };
 
 template<typename F>
+// -----------------------------------------------------------------------------
+// AIPlayer_minimax<F>: read_DFS(全幅探索)で手を選ぶ AI。決勝点の処理は AIPlayer と同じ。
+// -----------------------------------------------------------------------------
 struct AIPlayer_minimax : Player
 {
 	using Player::verbose;
@@ -299,13 +349,13 @@ struct AIPlayer_minimax : Player
 		enum Color now = board.validate();
 		if (verbose)
 		{
-			if (now == Color::Black) cout<<"\033[31m";
+			if (now == Color::White) cout<<"\033[31m";
 			cout << "score = " << ev << " by";
 			for (int xyz = 0; xyz < BOARD_SIZE; xyz++) if (mv & 1uLL << xyz)
 			{
 				cout << " (" << X(xyz) + 1 << ", " << Y(xyz) + 1 << ", " << Z(xyz) + 1 << "),";
 			}
-			if (now == Color::Black) cout<<"\033[m";
+			if (now == Color::White) cout<<"\033[m";
 			cout<<endl;
 		}
 		assert(mv);
