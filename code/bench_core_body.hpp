@@ -1,3 +1,13 @@
+// =============================================================================
+//  bench_core_body.hpp(コメント付き)
+//  解説: c109-gijutsushoten/explanation/ の解説 tex
+//
+//  bench_core.cpp と bench_core2.cpp に共通の本体。AI どうしの自己対戦を定跡から指し、
+//  対局ごとの手数・勝敗・時間・ノード数・評価値の列を出力する。
+//  include する側で AI、Weights、EvalFnT、init_tables() を定義しておく。
+//
+//  ★元のコードからの変更は、先手を白・後手を黒とする色の名前の入れ替え(enum Color など)と、コメントの追加だけである。
+// =============================================================================
 #pragma once
 
 // bench_core.cpp / bench_core2.cpp の共通本体。
@@ -112,7 +122,7 @@ int main(int argc, char** argv)
 		const long long nodes = 0;
 #endif
 		enum Color result;
-		if(ret == State::End) result = (game.board.validate() == Color::White) ? Color::Black : Color::White;
+		if(ret == State::End) result = (game.board.validate() == Color::Black) ? Color::White : Color::Black;
 		else result = Color::Draw;
 		wins[result]++;
 		total_sec += sec;
@@ -120,7 +130,7 @@ int main(int argc, char** argv)
 
 		printf("game %2d: moves=%2d result=%-5s %8.3f sec  nodes=%12lld\n",
 		       g + offset, (int)game.hand.size(),
-		       result == Color::Black ? "Black" : result == Color::White ? "White" : "Draw",
+		       result == Color::White ? "White" : result == Color::Black ? "Black" : "Draw",
 		       sec, nodes);
 		fflush(stdout);
 
@@ -139,7 +149,7 @@ int main(int argc, char** argv)
 	printf("--------\n");
 	printf("total: %.3f sec\n", total_sec);
 	printf("nodes: %lld\n", total_nodes);
-	printf("result: Black %d / White %d / Draw %d\n", wins[Color::Black], wins[Color::White], wins[Color::Draw]);
+	printf("result: White %d / Black %d / Draw %d\n", wins[Color::White], wins[Color::Black], wins[Color::Draw]);
 	printf("== move log ==\n%s", move_log.c_str());
 	printf("== score log (root value per AI turn; INF = not searched) ==\n%s", score_log.c_str());
 	return 0;

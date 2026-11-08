@@ -1,3 +1,12 @@
+// =============================================================================
+//  main_alpha.cpp(コメント付き)
+//  解説: c109-gijutsushoten/explanation/ の解説 tex
+//
+//  evaluate_alpha.hpp の評価関数を使う対局プログラム。AI どうし(先手(白)p1 と後手(黒)p2、読み 10手)で 1局を指し、
+//  かかった時間を表示する。先頭の #define NDEBUG で assert を無効にしている。
+//
+//  ★元のコードからの変更は、先手を白・後手を黒とする色の名前の入れ替え(enum Color など)と、コメントの追加だけである。
+// =============================================================================
 #define NDEBUG          // ← すべての #include より前（assert 無効化）
 # include <omp.h>
 
@@ -8,6 +17,7 @@
 #include "ai_player.hpp"
 #include "evaluate_alpha.hpp"
 
+// ビルド: g++ -std=c++17 -O2 -fopenmp code/main_alpha.cpp
 int main()
 {
 	init_lines();
@@ -27,6 +37,10 @@ int main()
 	auto msec = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now() - st);
 	cout << "total: " << msec.count() / 1e3 << " sec" << endl;
 	return 0;//連続で試合をする場合はここをコメントアウトする
+	// 自己対戦で教師データを作る部分(既定では、上の return 0 で終わるので実行されない)。
+	//   OpenMP で setting 本のスレッドを使い、各スレッドが N局ずつ自己対戦する。
+	//   最初の 3手は柱 (0..3, 0..3) を t から決め、AI は 10% の確率でランダムに指す(棋譜をばらつかせる)。
+	//   各局の先手・後手の評価値と棋譜を、スレッドごとの CSV(/yonmoku/esc/...)に 1行ずつ書く。
 	int cnt[3] = {};
 	static const int N = 4096;//<=100000 4096 8192
 
@@ -103,15 +117,15 @@ int main()
 			cnt[r]++;
 			gameNum[thread]++;
 			cout << "thread = " << thread << endl;
-			cout << "Black : " << cnt[Color::Black] << endl;
 			cout << "White : " << cnt[Color::White] << endl;
+			cout << "Black : " << cnt[Color::Black] << endl;
 			cout << " Draw : " << cnt[Color::Draw] << endl;
 			cout << "each thread ";
 			for(int i = 0; i < setting; i++){
 				cout << gameNum[i] << ",";
 			}
 			cout << "times game have finished" << endl;
-			cout << (cnt[Color::Black] + cnt[Color::White] + cnt[Color::Draw] + start_sum) * 100 / (double)(N * setting) << " % has finished" << endl;
+			cout << (cnt[Color::White] + cnt[Color::Black] + cnt[Color::Draw] + start_sum) * 100 / (double)(N * setting) << " % has finished" << endl;
 			for(int i = 0; i < setting; i++){
 				ofs_log << gameNum[i] << ",";
 			}
@@ -147,8 +161,8 @@ int main()
 	// 	cnt[r]++;
 	// 	//if(t % sparse == 0 || t == N)
 	// 	{
-	// 		cout << "Black : " << cnt[Color::Black] << endl;
 	// 		cout << "White : " << cnt[Color::White] << endl;
+	// 		cout << "Black : " << cnt[Color::Black] << endl;
 	// 		cout << " Draw : " << cnt[Color::Draw] << endl;
 	// 	}
 	// 	for(int i = 1; i < 33; i++)

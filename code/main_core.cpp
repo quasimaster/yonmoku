@@ -1,17 +1,26 @@
+// =============================================================================
+//  main_core.cpp(コメント付き)
+//  解説: c109-gijutsushoten/explanation/ の解説 tex
+//
+//  main_alpha_pvs_eval_inc_tbl_id_w.cpp の評価関数にコアの項(evaluate_core.hpp)を足した対局プログラム。
+//  --weights で weights/alpha/*.txt(core = 0)と weights/core/*.txt の両方を読める。既定では AI どうしで 1局を指す。
+//
+//  ★元のコードからの変更は、先手を白・後手を黒とする色の名前の入れ替え(enum Color など)と、コメントの追加だけである。
+// =============================================================================
 #ifndef USE_ASSERT
 #define NDEBUG          // ← すべての #include より前(assert 無効化。-DUSE_ASSERT で有効化)
 #endif
 
-// main_alpha_pvs_eval_inc_tbl_id_w.cpp に「核 2 マスの全状態」の評価項(6 本 / バケット)を足した版。
+// main_alpha_pvs_eval_inc_tbl_id_w.cpp に「コア 2マスの全状態」の評価項(6本 / バケット)を足した版。
 // 設計: docs/設計書/評価関数パラメータ/investigation-new-eval-features.md §2.6 D
 //
-// 流用元 main_alpha_pvs_eval_inc_tbl_id_w.cpp との差分は次の 3 点だけ。
+// 流用元 main_alpha_pvs_eval_inc_tbl_id_w.cpp との差分は次の 3点だけ。
 // 対局ループ・教師データ自己対戦・出力書式は完全に同一。
-//   1. include を evaluate_core.hpp に差し替え(既存評価 + 核の項)
+//   1. include を evaluate_core.hpp に差し替え(既存評価 + コアの項)
 //   2. using AI を AIPlayerPVSIncID<EvalFnCore> に、重みを EvalWeightsCore に差し替え
 //   3. --weights は version 1(既存。core = 0 として読む)と version 2(core 付き)の両方を受け付ける
 // core が全部 0 のモデル(--weights 省略時の組み込み既定値 / version 1 のファイル)では、
-// 流用元と 1 ノードも変わらない。core 付きの重みは MachineLearning/main_gd_core.cpp で学習する。
+// 流用元と 1ノードも変わらない。core 付きの重みは MachineLearning/main_gd_core.cpp で学習する。
 //
 // ■ 教師データ自己対戦の出力先
 //   流用元と同じ /yonmoku/esc/*_ver6_esc_thread*.csv のまま(自己対戦部は流用元どおり既定では実行されない)。
@@ -48,7 +57,7 @@ using AI = AIPlayerPVSIncID<EvalFnCore>;  // ★EvalFn → EvalFnCore
 
 // ===== 定跡(重複なし初手列)の読み込み =====
 // unique_opening/gen_unique_openings.cpp が出力するテキストを実行時に読む。
-//   形式: 1 行 1 手順で "    {{0,0}, {0,0}, {0,0}, {0,1}}," (手数は 4/5/6 手のいずれでも可)
+//   形式: 1行 1手順で "    {{0,0}, {0,0}, {0,0}, {0,1}}," (手数は 4/5/6手のいずれでも可)
 // 実行ディレクトリが読めない場合に備えて候補パスを順に試す。
 static vector<vector<pair<int, int> > > load_openings(const string& rel_path)
 {
@@ -147,7 +156,7 @@ int main(int argc, char** argv)
 	//   先手を人間にしたい場合は下の Game を  Game game(&human, &p1, true, {});  に差し替える
 
 	auto st = chrono::system_clock::now();
-	Game game(&p1, &p2, true, {});  // AI(先手) vs 人間(後手)
+	Game game(&p1, &p2, true, {});  // AI(先手(白)) vs AI(後手(黒))。人間と対局するときは &p2 を &human に替える
 	p1.set_game(&game);                // set_game は AI 側のみ必要(HumanPlayer は不要)
 	p2.set_game(&game);                // set_game は AI 側のみ必要(HumanPlayer は不要)
 	game.game();                       // ★対局開始(人間手番で範囲外座標 → 一手戻る)連続で試合をする場合はここをコメントアウトする
@@ -163,11 +172,11 @@ int main(int argc, char** argv)
 	int cnt[3] = {};
 
 	// 定跡ファイルごとの手順数(対称性で重複を除いた後の通り数):
-	//   unique_opening/unique_openings_4.txt : 4 手  →   2,925 通り
-	//   unique_opening/unique_openings_5.txt : 5 手  →  19,421 通り
-	//   unique_opening/unique_openings_6.txt : 6 手  → 129,018 通り
+	//   unique_opening/unique_openings_4.txt : 4手  →   2,925通り
+	//   unique_opening/unique_openings_5.txt : 5手  →  19,421通り
+	//   unique_opening/unique_openings_6.txt : 6手  → 129,018通り
 	//   (unique_openings.txt は _4.txt と同一内容。上記は各ファイルの "{{...}}" 行数 = load_openings が返す要素数)
-	// 初手は「全通り(4^6 = 4096 通りの 3 手)」ではなく、対称性で重複を除いた定跡ファイルから取る。
+	// 初手は「全通り(4^6 = 4096通りの 3手)」ではなく、対称性で重複を除いた定跡ファイルから取る。
 	const vector<vector<pair<int, int> > > openings = load_openings("unique_opening/unique_openings_4.txt");
 	if(openings.empty())
 	{
@@ -175,7 +184,7 @@ int main(int argc, char** argv)
 		return 1;
 	}
 	static const int PASSES = 4;                      // 定跡集合を何巡するか(ランダム性があるので巡ごとに棋譜は変わる)
-	const int N = (int)openings.size() * PASSES;      // 1 スレッドあたりの対局数
+	const int N = (int)openings.size() * PASSES;      // 1スレッドあたりの対局数
 
 	cout << "max_threads : " <<  omp_get_max_threads() << endl;
 	static const int setting = 8;//使用するスレッド数
@@ -235,15 +244,15 @@ int main(int argc, char** argv)
 			cnt[r]++;
 			gameNum[thread]++;
 			cout << "thread = " << thread << endl;
-			cout << "Black : " << cnt[Color::Black] << endl;
 			cout << "White : " << cnt[Color::White] << endl;
+			cout << "Black : " << cnt[Color::Black] << endl;
 			cout << " Draw : " << cnt[Color::Draw] << endl;
 			cout << "each thread ";
 			for(int i = 0; i < setting; i++){
 				cout << gameNum[i] << ",";
 			}
 			cout << "times game have finished" << endl;
-			cout << (cnt[Color::Black] + cnt[Color::White] + cnt[Color::Draw] + start_sum) * 100 / (double)(N * setting) << " % has finished" << endl;
+			cout << (cnt[Color::White] + cnt[Color::Black] + cnt[Color::Draw] + start_sum) * 100 / (double)(N * setting) << " % has finished" << endl;
 			for(int i = 0; i < setting; i++){
 				ofs_log << gameNum[i] << ",";
 			}

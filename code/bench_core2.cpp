@@ -1,3 +1,11 @@
+// =============================================================================
+//  bench_core2.cpp(コメント付き)
+//  解説: c109-gijutsushoten/explanation/ の解説 tex
+//
+//  main_core2.cpp(高速化版)と同じ探索・評価で、AI どうしの自己対戦の速さを測るプログラム(本体は bench_core_body.hpp)。
+//
+//  ★元のコードからの変更は、先手を白・後手を黒とする色の名前の入れ替え(enum Color など)と、コメントの追加だけである。
+// =============================================================================
 #ifndef USE_ASSERT
 #define NDEBUG          // ← すべての #include より前(assert 無効化。-DUSE_ASSERT で有効化)
 #endif
@@ -12,7 +20,7 @@
 //   -DUSE_LAZYSORT=0  手順の遅延選択を無効化(std::sort に戻す)
 //   -DUSE_FIXCNT=0    cnt の向き固定を無効化(ニブル交換 SWAR に戻す)
 //   -DUSE_TT_BUCKET=1 置換表のバケット化を無効化(1 way に戻す)
-// 4 つとも無効にしたビルドは bench_core.cpp とノード数・着手列・評価値が完全に一致する。
+// 4つとも無効にしたビルドは bench_core.cpp とノード数・着手列・評価値が完全に一致する。
 //
 //   g++ -std=c++17 -O2 -march=native -DBENCH code/bench_core2.cpp -o bench_core2
 
