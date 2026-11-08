@@ -1,3 +1,12 @@
+// =============================================================================
+//  evaluate_core2.hpp(コメント付き)
+//  解説: c109-gijutsushoten/explanation/ の解説 tex
+//
+//  evaluate_core.hpp の高速化版 EvalFnCore2。BoardInc2 と EvalWeightsCore2 を使う(main_core2.cpp などが使う)。
+//  評価値は EvalFnCore と同じ。
+//
+//  ★元のコードからの変更は、先手を白・後手を黒とする色の名前の入れ替え(enum Color など)と、コメントの追加だけである。
+// =============================================================================
 #pragma once
 
 #include "evaluate_core.hpp"               // core_term(無変更で流用。流用元の EvalFnCore もここに入るが名前は衝突しない)
@@ -5,7 +14,7 @@
 
 // evaluate_core.hpp の高速化版(設計: docs/設計書/高速化/speedup-proposal-main-core.md)。
 // 流用元 EvalFnCore との差分は「BoardInc → BoardInc2、EvalWeightsCore → EvalWeightsCore2、_rit → _rit2」だけで、
-// 評価値 = 既存評価 + 核 2 マスの項 は完全に同一。
+// 評価値 = 既存評価 + コア 2マスの項 は完全に同一。
 struct EvalFnCore2
 {
 	const EvalWeightsCore2* w;

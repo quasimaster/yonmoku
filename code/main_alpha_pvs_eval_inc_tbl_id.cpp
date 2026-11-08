@@ -1,3 +1,13 @@
+// =============================================================================
+//  main_alpha_pvs_eval_inc_tbl_id.cpp(コメント付き)
+//  解説: c109-gijutsushoten/explanation/ の解説 tex
+//
+//  現行の探索 AI(ai_player_pvs_inc_id.hpp)で対局し、教師データを作るプログラム。
+//  評価関数は evaluate_alpha_inc_tbl.hpp(重みは組み込み)。最終盤の機能 USE_ENDGAME_R2 / USE_ENDGAME_CUT をこのファイルで有効にしている。
+//  人間との対局部分は既定でコメントアウトされているので、そのまま実行すると教師データの自己対戦に進む。
+//
+//  ★元のコードからの変更は、先手を白・後手を黒とする色の名前の入れ替え(enum Color など)と、コメントの追加だけである。
+// =============================================================================
 #ifndef USE_ASSERT
 #define NDEBUG          // ← すべての #include より前(assert 無効化。-DUSE_ASSERT で有効化)
 #endif
@@ -7,7 +17,7 @@
 //   USE_ENDGAME_R2  : turn>=60 の葉評価を R0 → R2 に差し替え(ヒューリスティックの精度改善)
 //   USE_ENDGAME_CUT : turn>=59 で「証明可能に厳密」な局面を確定値で即 return し部分木を刈る
 // どちらも -DUSE_ENDGAME_R2=0 -DUSE_ENDGAME_CUT=0 で従来と完全同一の挙動に戻せる。
-// (ヘッダ側の既定は 0 なので、この 2 行が本ハーネスで機能を有効化している唯一の箇所)
+// (ヘッダ側の既定は 0 なので、この 2行が本ハーネスで機能を有効化している唯一の箇所)
 #ifndef USE_ENDGAME_R2
 #define USE_ENDGAME_R2 1
 #endif
@@ -37,7 +47,7 @@ using AI = AIPlayerPVSIncID<int(*)(const BoardInc&, unsigned long long, unsigned
 
 // ===== 定跡(重複なし初手列)の読み込み =====
 // unique_opening/gen_unique_openings.cpp が出力するテキストを実行時に読む。
-//   形式: 1 行 1 手順で "    {{0,0}, {0,0}, {0,0}, {0,1}}," (手数は 4/5/6 手のいずれでも可)
+//   形式: 1行 1手順で "    {{0,0}, {0,0}, {0,0}, {0,1}}," (手数は 4/5/6手のいずれでも可)
 // 実行ディレクトリが読めない場合に備えて候補パスを順に試す。
 static vector<vector<pair<int, int> > > load_openings(const string& rel_path)
 {
@@ -129,11 +139,11 @@ int main()
 	int cnt[3] = {};
 
 	// 定跡ファイルごとの手順数(対称性で重複を除いた後の通り数):
-	//   unique_opening/unique_openings_4.txt : 4 手  →   2,925 通り
-	//   unique_opening/unique_openings_5.txt : 5 手  →  19,421 通り
-	//   unique_opening/unique_openings_6.txt : 6 手  → 129,018 通り
+	//   unique_opening/unique_openings_4.txt : 4手  →   2,925通り
+	//   unique_opening/unique_openings_5.txt : 5手  →  19,421通り
+	//   unique_opening/unique_openings_6.txt : 6手  → 129,018通り
 	//   (unique_openings.txt は _4.txt と同一内容。上記は各ファイルの "{{...}}" 行数 = load_openings が返す要素数)
-	// 初手は「全通り(4^6 = 4096 通りの 3 手)」ではなく、対称性で重複を除いた定跡ファイルから取る。
+	// 初手は「全通り(4^6 = 4096通りの 3手)」ではなく、対称性で重複を除いた定跡ファイルから取る。
 	const vector<vector<pair<int, int> > > openings = load_openings("unique_opening/unique_openings_4.txt");
 	if(openings.empty())
 	{
@@ -141,7 +151,7 @@ int main()
 		return 1;
 	}
 	static const int PASSES = 4;                      // 定跡集合を何巡するか(ランダム性があるので巡ごとに棋譜は変わる)
-	const int N = (int)openings.size() * PASSES;      // 1 スレッドあたりの対局数
+	const int N = (int)openings.size() * PASSES;      // 1スレッドあたりの対局数
 
 	cout << "max_threads : " <<  omp_get_max_threads() << endl;
 	static const int setting = 8;//使用するスレッド数
@@ -201,15 +211,15 @@ int main()
 			cnt[r]++;
 			gameNum[thread]++;
 			cout << "thread = " << thread << endl;
-			cout << "Black : " << cnt[Color::Black] << endl;
 			cout << "White : " << cnt[Color::White] << endl;
+			cout << "Black : " << cnt[Color::Black] << endl;
 			cout << " Draw : " << cnt[Color::Draw] << endl;
 			cout << "each thread ";
 			for(int i = 0; i < setting; i++){
 				cout << gameNum[i] << ",";
 			}
 			cout << "times game have finished" << endl;
-			cout << (cnt[Color::Black] + cnt[Color::White] + cnt[Color::Draw] + start_sum) * 100 / (double)(N * setting) << " % has finished" << endl;
+			cout << (cnt[Color::White] + cnt[Color::Black] + cnt[Color::Draw] + start_sum) * 100 / (double)(N * setting) << " % has finished" << endl;
 			for(int i = 0; i < setting; i++){
 				ofs_log << gameNum[i] << ",";
 			}

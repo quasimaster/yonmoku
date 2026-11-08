@@ -1,15 +1,23 @@
+// =============================================================================
+//  bench_core.cpp(コメント付き)
+//  解説: c109-gijutsushoten/explanation/ の解説 tex
+//
+//  main_core.cpp と同じ探索・評価で、AI どうしの自己対戦の速さを測るプログラム(本体は bench_core_body.hpp)。
+//
+//  ★元のコードからの変更は、先手を白・後手を黒とする色の名前の入れ替え(enum Color など)と、コメントの追加だけである。
+// =============================================================================
 #ifndef USE_ASSERT
 #define NDEBUG          // ← すべての #include より前(assert 無効化。-DUSE_ASSERT で有効化)
 #endif
 
 // main_core.cpp(既存版)の探索・評価をそのまま使う AI vs AI 自己対戦の計測ハーネス。
 // 高速化版 bench_core2.cpp との速度比較・完全一致確認に使う(設計: docs/設計書/高速化/speedup-proposal-main-core.md §2)。
-// bench_endgame_selfplay_w.cpp を母体に、次の 3 点を変えた。
+// bench_endgame_selfplay_w.cpp を母体に、次の 3点を変えた。
 //   1. 評価関数を EvalFnCore(evaluate_core.hpp)、重みを EvalWeightsCore にした(= main_core.cpp と同じ)
 //   2. 第 4 引数で定跡の開始番号を指定できる(乱数状態は対局間で引き継がれるので、比較は同じ開始番号・同じ局数で行う)
 //   3. 各局の root 評価値列(先手/後手)も出力する(置換表の変更で評価値が変わっていないかを diff で見るため)
 //
-//   引数: [対局数] [読み手数 level] [重みファイル("-" で組み込み既定値)] [定跡の開始番号]   既定 = 8 局 / level 10 / builtin / 0
+//   引数: [対局数] [読み手数 level] [重みファイル("-" で組み込み既定値)] [定跡の開始番号]   既定 = 8局 / level 10 / builtin / 0
 //
 // ビルド(比較は必ず同一フラグで):
 //   g++ -std=c++17 -O2 -march=native -DBENCH code/bench_core.cpp  -o bench_core

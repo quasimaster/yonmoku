@@ -1,12 +1,21 @@
+// =============================================================================
+//  eval_weights_core.hpp(コメント付き)
+//  解説: c109-gijutsushoten/explanation/ の解説 tex
+//
+//  eval_weights.hpp の重みに、コアの項の重み(core、6個 × 4区間 × 先手用・後手用)を足したモデル EvalWeightsCore。
+//  weights/core/*.txt(version 2)と weights/alpha/*.txt(version 1、core はすべて 0 として読む)の両方を読める。
+//
+//  ★元のコードからの変更は、先手を白・後手を黒とする色の名前の入れ替え(enum Color など)と、コメントの追加だけである。
+// =============================================================================
 #pragma once
 
 #include "eval_weights.hpp"   // EvalWeights / SideWeights / evalw::(trim, read_line, parse_ints, store, fetch)
 #include "core_feature.hpp"   // core_feat::NUM
 
-// eval_weights.hpp に「核 2 マスの全状態」の重み(core)を足したモデル。
+// eval_weights.hpp に「コア 2マスの全状態」の重み(core)を足したモデル。
 // 設計: docs/設計書/評価関数パラメータ/investigation-new-eval-features.md §2.6 D / §5.1
 //
-// 既存の EvalWeights は 1 行も変えずに base として丸ごと持つ。
+// 既存の EvalWeights は 1行も変えずに base として丸ごと持つ。
 // したがって既存の評価関数(evaluate_alpha_inc_tbl_w.hpp)に base をそのまま渡せ、
 // core を全部 0 にすれば既存モデルと完全に同じ評価値になる。
 //
@@ -16,7 +25,7 @@
 //     [fir.bucket0]
 //     stdweight         = ...           # 既存 7 キーは version 1 と同一
 //     ...
-//     core              = a,b,c,d,e,f   # 6 個。core_feature.hpp の out[0..5] の順
+//     core              = a,b,c,d,e,f   # 6個。core_feature.hpp の out[0..5] の順
 //
 // ★ファイル入力は eval_weights.hpp と同じく cstdio で行う(MinGW でヘッダ inline 内の
 //   std::ifstream 構築が -O1 以上で SEGV するため。eval_weights.hpp 冒頭の注意を参照)。
@@ -29,7 +38,7 @@ struct EvalWeightsCore
 
 	bool load(const string& path, string* err);
 	static const EvalWeightsCore& builtin();   // base = EvalWeights::builtin()(ver7.2), core = 0
-	bool has_core() const;                     // core が 1 つでも非 0 か
+	bool has_core() const;                     // core が 1つでも非 0 か
 };
 
 namespace evalwc
@@ -46,7 +55,7 @@ inline bool EvalWeightsCore::has_core() const
 }
 
 // 読み込み処理は EvalWeights::load()(eval_weights.hpp:178-275)と同じ手順で、
-// 差分は「core キーを受け付ける」「version 2 を受け付ける」の 2 点だけ。
+// 差分は「core キーを受け付ける」「version 2 を受け付ける」の 2点だけ。
 // 失敗時は false を返し err に「パス:行番号: 理由」を入れる。組み込み既定値へは戻らない。
 inline bool EvalWeightsCore::load(const string& path, string* err)
 {

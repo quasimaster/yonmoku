@@ -1,3 +1,14 @@
+// =============================================================================
+//  engine_api.cpp(コメント付き)
+//  解説: c109-gijutsushoten/explanation/ の解説 tex
+//
+//  Web 版(ブラウザ)の思考エンジンの API。WASM にして web/worker.js から呼ぶ。
+//  探索・評価は main_alpha_pvs_eval_inc_tbl_id.cpp と同じ(ai_player_pvs_inc_id.hpp + evaluate_alpha_inc_tbl.hpp)。
+//  盤面・棋譜・一手戻る・難易度(読みの深さのプロファイル)を管理し、C の関数(yon_*)として公開する。
+//  ★公開関数の名前(yon_black など)は web/ の JavaScript から呼ばれるので変えていない。名前の black は先手(白)を指す。
+//
+//  ★元のコードからの変更は、先手を白・後手を黒とする色の名前の入れ替え(enum Color など)と、コメントの追加だけである。
+// =============================================================================
 // ===== 立体四目並べ Web 版 エンジン API =====
 // 設計: docs/設計書/Web公開/implementation-plan-web-ui-3d.md §3
 //
@@ -73,15 +84,15 @@ static Board                     g_board;              // 現在局面(Me = 手�
 static vector<pair<int, int> >   g_hand;               // ★棋譜。唯一の真実の源
 static Game*                     g_dummy   = nullptr;  // AI が game->evaluates*_tmp[] を書くために必須
 static AI*                       g_ai      = nullptr;
-static bool                      g_human_is_black = true;
+static bool                      g_human_is_white = true;
 static int                       g_profile = PROFILE_DEFAULT;
 static int                       g_tt_bits = 0;        // 現在の AI が持つ TT のビット数
-static int                       g_status  = 0;        // 0=継続 1=黒勝ち 2=白勝ち 3=引分
+static int                       g_status  = 0;        // 0=継続 1=白勝ち 2=黒勝ち 3=引分
 static bool                      g_inited  = false;
 
 // 直前の思考結果(yon_think / yon_analyze が更新)
 static int       g_last_sq          = -1;
-static int       g_last_score_black = 0;      // ★常に黒視点に正規化した評価値
+static int       g_last_score_white = 0;      // ★常に白視点に正規化した評価値
 static bool      g_last_valid       = false;
 static bool      g_last_mate        = false;  // 即勝ち手を見つけた(探索を経ていない)
 static double    g_last_ms          = 0.0;
@@ -107,10 +118,10 @@ inline int yon_depth_target(int turn, int level)
 // ===== 補助 =====
 
 // 絶対色のビットボード(設計書 §3.4)。Board::print() と同じ変換。
-static inline void abs_bits(unsigned long long& black, unsigned long long& white)
+static inline void abs_bits(unsigned long long& white, unsigned long long& black)
 {
-	if (g_board.validate() == Color::Black) { black = g_board.Me; white = g_board.You; }
-	else                                    { black = g_board.You; white = g_board.Me; }
+	if (g_board.validate() == Color::White) { white = g_board.Me; black = g_board.You; }
+	else                                    { white = g_board.You; black = g_board.Me; }
 }
 
 // (x, y) に石を落としたときの z。満杯なら -1。
@@ -139,7 +150,7 @@ static void replay_from_hand()
 		const enum State r = g_board.place(g_hand[i].first, g_hand[i].second);
 		if (r == State::End)
 		{
-			// i 手目(0 始まり)を指した側の勝ち。偶数 index = 黒。
+			// i 手目(0 始まり)を指した側の勝ち。偶数 index = 白。
 			g_status = (i % 2 == 0) ? 1 : 2;
 			break;
 		}
@@ -170,7 +181,7 @@ static void ensure_ai(int profile)
 	g_ai->level = p.n_open;                          // 序盤バケットの読み手数(history のスケールにも使われる)
 	g_ai->set_random(0);                             // MVP ではランダム手を使わない
 	// AI が持つ色に応じた評価関数(先手用 / 後手用)
-	g_ai->evaluate_func = g_human_is_black ? evaluate_pointsec_cont_layer_intersection_rit
+	g_ai->evaluate_func = g_human_is_white ? evaluate_pointsec_cont_layer_intersection_rit
 	                                       : evaluate_pointfir_cont_layer_intersection_rit;
 }
 
@@ -181,11 +192,11 @@ static void ensure_ai(int profile)
 static void search_only(int* out_sq, int* out_score_mover, bool* out_mate)
 {
 	const int turn = g_board.turn();               // move() 内部と同じ値(石数 + 1)
-	const bool black_to_move = (turn % 2 == 1);
+	const bool white_to_move = (turn % 2 == 1);
 
 	// move() は即勝ち手を見つけると評価値を書かずに return する。
 	// 事前に番兵 INF を入れておき、書き換わったかどうかで判定する。
-	int* slot = black_to_move ? &g_dummy->evaluatesfir_tmp[(turn + 1) / 2]
+	int* slot = white_to_move ? &g_dummy->evaluatesfir_tmp[(turn + 1) / 2]
 	                          : &g_dummy->evaluatessec_tmp[turn / 2];
 	*slot = INF;
 
@@ -218,8 +229,8 @@ static void search_only(int* out_sq, int* out_score_mover, bool* out_mate)
 	}
 }
 
-// 手番側視点の評価値を黒視点に正規化する(設計書 §4.6.1)。
-static inline int to_black_view(int score_mover)
+// 手番側視点の評価値を白視点に正規化する(設計書 §4.6.1)。
+static inline int to_white_view(int score_mover)
 {
 	return (g_board.turn() % 2 == 1) ? score_mover : -score_mover;
 }
@@ -251,16 +262,16 @@ EMSCRIPTEN_KEEPALIVE void yon_init(void)
 	g_inited = true;
 }
 
-EMSCRIPTEN_KEEPALIVE void yon_new_game(int human_is_black, int profile)
+EMSCRIPTEN_KEEPALIVE void yon_new_game(int human_is_white, int profile)
 {
 	yon_init();
-	g_human_is_black = (human_is_black != 0);
+	g_human_is_white = (human_is_white != 0);
 	g_hand.clear();
 	g_board = Board();
 	g_status = 0;
 	g_last_valid = false;
 	g_last_sq = -1;
-	g_last_score_black = 0;
+	g_last_score_white = 0;
 	g_last_mate = false;
 	g_last_ms = 0.0;
 	g_last_nodes = 0;
@@ -294,7 +305,7 @@ EMSCRIPTEN_KEEPALIVE int yon_think(void)
 	search_only(&sq, &score_mover, &mate);
 
 	g_last_sq = sq;
-	g_last_score_black = to_black_view(score_mover);   // ★ place() の前に評価する(手番が反転するため)
+	g_last_score_white = to_white_view(score_mover);   // ★ place() の前に評価する(手番が反転するため)
 	g_last_mate = mate;
 	g_last_valid = true;
 
@@ -313,7 +324,7 @@ EMSCRIPTEN_KEEPALIVE int yon_analyze(void)
 	search_only(&sq, &score_mover, &mate);
 
 	g_last_sq = sq;
-	g_last_score_black = to_black_view(score_mover);
+	g_last_score_white = to_white_view(score_mover);
 	g_last_mate = mate;
 	g_last_valid = true;
 	return sq;
@@ -323,8 +334,8 @@ EMSCRIPTEN_KEEPALIVE int yon_analyze(void)
 EMSCRIPTEN_KEEPALIVE int yon_undo(void)
 {
 	yon_init();
-	// 人間の手の index パリティ: 黒番なら偶数、白番なら奇数
-	const size_t human_parity = g_human_is_black ? 0 : 1;
+	// 人間の手の index パリティ: 白番なら偶数、黒番なら奇数
+	const size_t human_parity = g_human_is_white ? 0 : 1;
 	int j = (int)g_hand.size();
 	while (j > 0 && (size_t)(j - 1) % 2 != human_parity) j--;   // 末尾の AI 手を読み飛ばす
 	if (j == 0) return (int)g_hand.size();                      // 戻せる人間手が無い
@@ -354,6 +365,9 @@ EMSCRIPTEN_KEEPALIVE int yon_load(const int* xy, int len)
 
 // --- 問い合わせるだけの関数(局面を変えない) ---
 
+// ★関数名の black / white について: これらは web/main.js・web/worker.js から呼ばれる公開 API なので、名前は元のまま残している。
+//   名前の black は「先手」= 本文tex の白、white は「後手」= 本文tex の黒を指す。
+//   yon_black() は先手(白)の石、yon_white() は後手(黒)の石を返す(abs_bits の 1つ目の引数が先手の石)。
 EMSCRIPTEN_KEEPALIVE unsigned long long yon_black(void)
 {
 	unsigned long long b, w; abs_bits(b, w); return b;
@@ -379,22 +393,25 @@ EMSCRIPTEN_KEEPALIVE int yon_status(void) { return g_status; }
 EMSCRIPTEN_KEEPALIVE int yon_turn(void)   { return g_board.turn(); }
 EMSCRIPTEN_KEEPALIVE int yon_move_count(void) { return (int)g_hand.size(); }
 
-// 次に指すのが黒か(1 = 黒番)
+// 次に指すのが白か(1 = 白番)
+// yon_black_to_move: 次に指すのが先手(白)なら 1。yon_human_is_black: 人間が先手(白)なら 1。
+// (名前の black は先手を指す。上の★を参照)
 EMSCRIPTEN_KEEPALIVE int yon_black_to_move(void) { return g_board.turn() % 2 == 1 ? 1 : 0; }
-EMSCRIPTEN_KEEPALIVE int yon_human_is_black(void) { return g_human_is_black ? 1 : 0; }
+EMSCRIPTEN_KEEPALIVE int yon_human_is_black(void) { return g_human_is_white ? 1 : 0; }
 
 EMSCRIPTEN_KEEPALIVE int       yon_last_sq(void)     { return g_last_valid ? g_last_sq : -1; }
-EMSCRIPTEN_KEEPALIVE int       yon_last_score(void)  { return g_last_score_black; }
+EMSCRIPTEN_KEEPALIVE int       yon_last_score(void)  { return g_last_score_white; }
 EMSCRIPTEN_KEEPALIVE int       yon_last_is_mate(void){ return g_last_mate ? 1 : 0; }
 EMSCRIPTEN_KEEPALIVE int       yon_last_valid(void)  { return g_last_valid ? 1 : 0; }
 EMSCRIPTEN_KEEPALIVE double    yon_last_ms(void)     { return g_last_ms; }
 EMSCRIPTEN_KEEPALIVE double    yon_last_nodes(void)  { return (double)g_last_nodes; }
 
-// 黒視点の勝率 %(既存 verbose 出力と同じシグモイド式)
+// 白視点の勝率 %(既存 verbose 出力と同じシグモイド式)
+// 先手(白)から見た勝率 %(名前の black は先手を指す)。
 EMSCRIPTEN_KEEPALIVE double yon_win_rate_black(void)
 {
 	if (!g_last_valid) return 50.0;
-	const double s = (double)g_last_score_black;
+	const double s = (double)g_last_score_white;
 	if (s >=  MATE_SCORE) return 100.0;
 	if (s <= -MATE_SCORE) return 0.0;
 	return 100.0 / (1.0 + exp(-s / 400.0));
@@ -423,7 +440,7 @@ EMSCRIPTEN_KEEPALIVE unsigned long long yon_win_line(void)
 	return 0uLL;
 }
 
-// color: 1 = 黒 / 2 = 白。リーチ(次に置けば四目)のマスのうち、実際に着手可能なもの
+// color: 1 = 白 / 2 = 黒。決勝点(次に置けば四目)のマスのうち、実際に着手可能なもの
 EMSCRIPTEN_KEEPALIVE unsigned long long yon_reach(int color)
 {
 	unsigned long long b, w; abs_bits(b, w);
@@ -431,7 +448,7 @@ EMSCRIPTEN_KEEPALIVE unsigned long long yon_reach(int color)
 	return r & g_board.valid_move();
 }
 
-// 棋譜を書き出す。out には手数 * 2 個の int が入る。戻り値は手数
+// 棋譜を書き出す。out には手数 * 2個の int が入る。戻り値は手数
 EMSCRIPTEN_KEEPALIVE int yon_hand(int* out)
 {
 	for (size_t i = 0; i < g_hand.size(); i++)

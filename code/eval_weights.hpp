@@ -1,3 +1,13 @@
+// =============================================================================
+//  eval_weights.hpp(コメント付き)
+//  解説: c109-gijutsushoten/explanation/ の解説 tex
+//
+//  評価関数の重み(1モデル = 先手(白)用 fir + 後手(黒)用 sec)と、重みファイルの読み書き。
+//  重みファイルの形式は weights/README.md を参照。
+//  組み込みの既定値 EvalWeights::builtin() は、evaluate_alpha_inc_tbl.hpp に書かれていた値(ver7.2)と同じである。
+//
+//  ★元のコードからの変更は、先手を白・後手を黒とする色の名前の入れ替え(enum Color など)と、コメントの追加だけである。
+// =============================================================================
 #pragma once
 
 #include <cstring>
@@ -12,7 +22,7 @@
 //
 // 添字規約は現行の evaluate_alpha_inc_tbl.hpp / evaluate_alpha_t.hpp の配列と完全に同一。
 // 重み値そのものは builtin() が現行のリテラルを保持するので、
-// 組み込み既定値を使う限り既存実装と 1 ノードも変わらない。
+// 組み込み既定値を使う限り既存実装と 1ノードも変わらない。
 //
 // ★環境依存の注意(本環境で実測して判明):
 //   MinGW-w64 g++ 13.2.0 + 共有 libstdc++ では、ヘッダ内の inline 関数の中で
@@ -60,6 +70,7 @@ inline int eval_cnt_to_v(int idx)
 	return (cme && cyou) ? 0 : (cme ? cme : -cyou);   // board.count() と同じ規約(両者混在は 0)
 }
 
+// flag_tbl を作る。bit0 = Me の石だけが 2つのライン、bit1 = You の石だけが 2つのライン。
 inline void init_flag_tbl()
 {
 	for (int idx = 0; idx < 256; idx++)
@@ -102,7 +113,7 @@ namespace evalw
 		return s.substr(a, b - a + 1);
 	}
 
-	// FILE* から 1 行読む(改行は含めない)。EOF で 1 文字も読めなければ false。
+	// FILE* から 1行読む(改行は含めない)。EOF で 1文字も読めなければ false。
 	// ※ ヘッダ inline 内で std::ifstream を構築できないための代替(冒頭の注意を参照)。
 	inline bool read_line(FILE* fp, string& out)
 	{
@@ -276,6 +287,7 @@ inline bool EvalWeights::load(const string& path, string* err)
 
 // 重みを §2.4 の形式で出力する(dump_weights / 検証用)。
 // ※ ostream は「受け取るだけ」なので冒頭の環境依存の注意には該当しない。
+// 重み W を、重みファイルと同じ形式で os に書き出す(tools/dump_weights.cpp が使う)。
 inline void dump_eval_weights(ostream& os, const EvalWeights& W)
 {
 	os << "# 立体四目並べ 評価関数重み\n";
@@ -290,7 +302,7 @@ inline void dump_eval_weights(ostream& os, const EvalWeights& W)
 			for (int i = 0; i < 7; i++)
 			{
 				string k = evalw::KEY[i];
-				k.resize(17, ' ');                       // 桁揃え(conti_maketweight が最長 17 文字)
+				k.resize(17, ' ');                       // 桁揃え(conti_maketweight が最長 17文字)
 				os << k << " = ";
 				const vector<int> v = evalw::fetch(S, i, b);
 				for (size_t j = 0; j < v.size(); j++) { if (j) os << ","; os << v[j]; }
@@ -389,6 +401,7 @@ inline const EvalWeights& EvalWeights::builtin()
 }
 
 // 2 モデルの生の重み 256 値が完全一致するか(検証用。派生表は build_tables で決まるので見ない)
+// 2つのモデルの重みがすべて等しいかを返す(名前は比べない)。
 inline bool same_eval_weights(const EvalWeights& a, const EvalWeights& b)
 {
 	return memcmp(&a.fir, &b.fir, sizeof(SideWeights)) == 0

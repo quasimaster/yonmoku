@@ -1,12 +1,21 @@
+// =============================================================================
+//  match_weights.cpp(コメント付き)
+//  解説: c109-gijutsushoten/explanation/ の解説 tex
+//
+//  2つの重み(評価関数のモデル)A と B を AI どうしで対戦させ、勝率で強さを比べるプログラム。
+//  先手(白)と後手(黒)を入れ替えて 2局ずつ指すので、先手の有利さは打ち消される。使い方は code/README_match_weights.md。
+//
+//  ★元のコードからの変更は、先手を白・後手を黒とする色の名前の入れ替え(enum Color など)と、コメントの追加だけである。
+// =============================================================================
 #ifndef USE_ASSERT
 #define NDEBUG          // ← すべての #include より前(assert 無効化。-DUSE_ASSERT で有効化)
 #endif
 
-// 2 つの重みモデルを対戦させ、強さの差を勝率で測るハーネス(マルチスレッド)。
+// 2つの重みモデルを対戦させ、強さの差を勝率で測るハーネス(マルチスレッド)。
 // 設計: docs/設計書/評価関数バージョン管理/implementation-plan-eval-weights-file.md §2.6
 //
 // 探索・評価・盤面・TT は main_alpha_pvs_eval_inc_tbl_id.cpp と完全に同一のものを include する。
-// 重みは weights/alpha/(version 1)と weights/core/(version 2。核の項 core 付き、main_core.cpp と同じ評価)の両方を受け付け、
+// 重みは weights/alpha/(version 1)と weights/core/(version 2。コアの項 core 付き、main_core.cpp と同じ評価)の両方を受け付け、
 // 混在(alpha 対 core)の対戦もできる。
 // 両プレイヤーとも set_random(0)。棋譜のばらつきは「評価値が同点の最善手からの乱択」だけから生じる。
 //
@@ -14,9 +23,9 @@
 //   match_weights <A.txt|builtin> <B.txt|builtin> hirate   <総局数(偶数)>        [並列数=1] [level=10]
 //   match_weights <A.txt|builtin> <B.txt|builtin> openings <1スレッドあたり周回数> [並列数=1] [level=10]
 //
-//   hirate   : 平手。総局数を先後の組(2 局)単位で並列数に割り振り、各スレッドは A 先手 / B 先手を交互に打つ。
+//   hirate   : 平手。総局数を先後の組(2局)単位で並列数に割り振り、各スレッドは A 先手 / B 先手を交互に打つ。
 //   openings : unique_opening/unique_openings_4.txt の全定跡を、各スレッドが指定周回数ずつ回す。
-//              定跡 1 本につき A 先手 / B 先手の 2 局。総局数 = 並列数 × 周回数 × 定跡数 × 2。
+//              定跡 1本につき A 先手 / B 先手の 2局。総局数 = 並列数 × 周回数 × 定跡数 × 2。
 //
 //   例: match_weights weights/alpha/ver8_2.txt weights/alpha/ver8_2_5.txt hirate 10000 16 8
 //       match_weights weights/alpha/ver8_2_5.txt weights/core/ver1_0_core.txt hirate 10000 16 8
@@ -26,7 +35,7 @@
 //   スレッド t のシードは 5489 + t(5489 は mt19937 の既定シード)。並列数と引数が同じなら結果は再現する。
 //
 // ■ メモリ
-//   AI 1 体あたり TT 64MB。1 スレッドで 2 体 = 128MB、並列数 16 なら約 2GB。
+//   AI 1 体あたり TT 64MB。1スレッドで 2 体 = 128MB、並列数 16 なら約 2GB。
 //
 // ビルド:
 //   g++ -std=c++17 -O2 -DBENCH code/match_weights.cpp -o match_weights
@@ -57,8 +66,8 @@ inline thread_local mt19937 g_match_rng;
 #include <atomic>
 
 // 重みは EvalWeightsCore で持つ(version 1 = weights/alpha/ も version 2 = weights/core/ も読める)。
-// core が 1 つでも非 0 のモデルは EvalFnCore、全部 0 のモデル(version 1 / builtin)は従来どおり EvalFn で評価する。
-// EvalFnCore は core = 0 でも評価値は EvalFn と同じだが、核の項の計算が葉ごとに入るので、
+// core が 1つでも非 0 のモデルは EvalFnCore、全部 0 のモデル(version 1 / builtin)は従来どおり EvalFn で評価する。
+// EvalFnCore は core = 0 でも評価値は EvalFn と同じだが、コアの項の計算が葉ごとに入るので、
 // core 無しのモデルでは EvalFn を直接呼んで改修前と同じ速度・同じノード数に保つ。
 struct EvalFnMatch
 {
@@ -179,7 +188,7 @@ static long long parse_positive(const char* s)
 	return v;
 }
 
-// 1 スレッド分の集計。[0] A が先手 / [1] B が先手。各要素は A から見た 勝 / 敗 / 分
+// 1スレッド分の集計。[0] A が先手 / [1] B が先手。各要素は A から見た 勝 / 敗 / 分
 struct Tally
 {
 	long long win[2] = {}, lose[2] = {}, draw[2] = {};
@@ -198,16 +207,16 @@ struct Shared
 	atomic<long long> done{0};
 };
 
-// 1 局打って t に加算し、1 行出力する。side 0: A 先手 / side 1: B 先手
+// 1局打って t に加算し、1行出力する。side 0: A 先手 / side 1: B 先手
 static void play_one(Shared& sh, Tally& t, int tid, const char* label, const vector<pair<int, int> >& book, int side)
 {
-	const EvalWeightsCore* black = (side == 0) ? sh.A : sh.B;
-	const EvalWeightsCore* white = (side == 0) ? sh.B : sh.A;
+	const EvalWeightsCore* white = (side == 0) ? sh.A : sh.B;
+	const EvalWeightsCore* black = (side == 0) ? sh.B : sh.A;
 
 	// 先手番は先手用エントリ(fir)、後手番は後手用エントリ(sec)を使う。
 	// これは既存の main / bench と同じ割り当てで、色に対応するものであってモデルの識別ではない。
-	AI p1(sh.level, EvalFnMatch{black, false, black->has_core()});
-	AI p2(sh.level, EvalFnMatch{white, true , white->has_core()});
+	AI p1(sh.level, EvalFnMatch{white, false, white->has_core()});
+	AI p2(sh.level, EvalFnMatch{black, true , black->has_core()});
 	p1.set_random(0);
 	p2.set_random(0);
 	Game game(&p1, &p2, false, book);
@@ -237,20 +246,20 @@ static void play_one(Shared& sh, Tally& t, int tid, const char* label, const vec
 	t.sec += sec;
 	t.nodes += nodes;
 
-	// 勝者(黒 / 白 / 引分)を A から見た結果へ読み替える
+	// 勝者(白 / 黒 / 引分)を A から見た結果へ読み替える
 	enum Color result;
-	if(ret == State::End) result = (game.board.validate() == Color::White) ? Color::Black : Color::White;
+	if(ret == State::End) result = (game.board.validate() == Color::Black) ? Color::White : Color::Black;
 	else result = Color::Draw;
 
 	const char* a_res;
 	if(result == Color::Draw)                                  { t.draw[side]++; a_res = "draw"; }
-	else if((result == Color::Black) == (side == 0))            { t.win[side]++;  a_res = "A win"; }
+	else if((result == Color::White) == (side == 0))            { t.win[side]++;  a_res = "A win"; }
 	else                                                        { t.lose[side]++; a_res = "B win"; }
 
 	const long long d = ++sh.done;
 	char buf[256];
 	snprintf(buf, sizeof(buf), "[t%02d] %s %s: moves=%2d %-6s %8.3f sec  nodes=%12lld  (%lld/%lld)\n",
-	         tid, label, side == 0 ? "A-black" : "B-black",
+	         tid, label, side == 0 ? "A-white" : "B-white",
 	         (int)game.hand.size(), a_res, sec, nodes, d, sh.total_games);
 	lock_guard<mutex> lk(sh.out_mtx);
 	fputs(buf, stdout);
@@ -293,7 +302,7 @@ int main(int argc, char** argv)
 	vector<long long> games_of;   // hirate: スレッドごとの局数
 	if(hirate)
 	{
-		// 先後の組(2 局)単位で配り、各スレッドの A 先手 / B 先手を同数に保つ
+		// 先後の組(2局)単位で配り、各スレッドの A 先手 / B 先手を同数に保つ
 		const long long pairs = count / 2;
 		if(threads > pairs)
 		{

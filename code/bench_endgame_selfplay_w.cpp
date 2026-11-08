@@ -1,3 +1,11 @@
+// =============================================================================
+//  bench_endgame_selfplay_w.cpp(コメント付き)
+//  解説: c109-gijutsushoten/explanation/ の解説 tex
+//
+//  bench_endgame_selfplay.cpp の重みを外部ファイルから読めるようにした版(第3引数に重みファイル)。
+//
+//  ★元のコードからの変更は、先手を白・後手を黒とする色の名前の入れ替え(enum Color など)と、コメントの追加だけである。
+// =============================================================================
 #ifndef USE_ASSERT
 #define NDEBUG          // ← すべての #include より前(assert 無効化。-DUSE_ASSERT で有効化)
 #endif
@@ -5,14 +13,14 @@
 // bench_endgame_selfplay.cpp の「重み外部ファイル化」版(_w)。
 // 設計: docs/設計書/評価関数バージョン管理/implementation-plan-eval-weights-file.md §5.1 / §5.2
 //
-// 流用元との差分は次の 3 点だけ。探索・盤面・TT・対局ループは完全に同一。
+// 流用元との差分は次の 3点だけ。探索・盤面・TT・対局ループは完全に同一。
 //   1. include を evaluate_alpha_inc_tbl_w.hpp に差し替え
 //   2. using AI を AIPlayerPVSIncID<EvalFn> に差し替え
 //   3. 第 3 引数で重みファイルを受け取れるようにした(省略時は組み込み既定値)
 // stdout の書式は流用元と完全に同一に保つ(diff で完全一致を確認するため)。
 // 重みの素性は stderr に出す。
 //
-//   引数: [対局数] [読み手数 level] [重みファイル]   既定 = 8 局 / level 10 / builtin
+//   引数: [対局数] [読み手数 level] [重みファイル]   既定 = 8局 / level 10 / builtin
 //
 // ビルド(比較は必ず同一フラグで):
 //   g++ -std=c++17 -O2 -DBENCH code/bench_endgame_selfplay.cpp   -o bench_before
@@ -143,7 +151,7 @@ int main(int argc, char** argv)
 		const long long nodes = 0;
 #endif
 		enum Color result;
-		if(ret == State::End) result = (game.board.validate() == Color::White) ? Color::Black : Color::White;
+		if(ret == State::End) result = (game.board.validate() == Color::Black) ? Color::White : Color::Black;
 		else result = Color::Draw;
 		wins[result]++;
 		total_sec += sec;
@@ -151,7 +159,7 @@ int main(int argc, char** argv)
 
 		printf("game %2d: moves=%2d result=%-5s %8.3f sec  nodes=%12lld\n",
 		       g, (int)game.hand.size(),
-		       result == Color::Black ? "Black" : result == Color::White ? "White" : "Draw",
+		       result == Color::White ? "White" : result == Color::Black ? "Black" : "Draw",
 		       sec, nodes);
 		fflush(stdout);
 
@@ -162,7 +170,7 @@ int main(int argc, char** argv)
 	printf("--------\n");
 	printf("total: %.3f sec\n", total_sec);
 	printf("nodes: %lld\n", total_nodes);
-	printf("result: Black %d / White %d / Draw %d\n", wins[Color::Black], wins[Color::White], wins[Color::Draw]);
+	printf("result: White %d / Black %d / Draw %d\n", wins[Color::White], wins[Color::Black], wins[Color::Draw]);
 #if EG_SELFCHECK
 	printf("eg_selfcheck: %lld 件の打ち切りを全読みと照合(不一致は即 abort)\n", g_eg_check_count);
 #endif

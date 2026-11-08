@@ -1,51 +1,126 @@
+// =============================================================================
+//  common.hpp(コメント付き)
+//  解説: c109-gijutsushoten/explanation/ の解説 tex
+//
+//  立体四目並べ(4×4×4、重力あり)の全プログラムが最初に include する共通定義。
+//    - 標準ライブラリの一括 include
+//    - 乱数生成器
+//    - マスの状態・対局状態・手番色を表す列挙型
+//    - 座標 (x, y, z) とビット位置(マス番号)の相互変換マクロ
+//    - 勝ちライン 76本を入れる配列 LINES(中身は board.hpp の init_lines() が作る)
+//    - 探索で手を試す順番 move_order
+//
+//  ★元のコードからの変更は、先手を白・後手を黒とする色の名前の入れ替え(enum Color など)と、コメントの追加だけである。
+// =============================================================================
+
+// 同じヘッダを何度 include しても 1回だけ読み込まれるようにする指示。
 #pragma once
 
-#include<iostream>
+// ---- 標準ライブラリ ---------------------------------------------------------
+// 盤面以外のファイル(探索・評価・対局)が使うものも含め、ここでまとめて読み込む。
+#include<iostream>   // cout / cerr
 #include<queue>
-#include<vector>
-#include<array>
-#include<algorithm>
-#include<cassert>
-#include<random>
+#include<vector>     // vector
+#include<array>      // array(LINES など固定長配列)
+#include<algorithm>  // swap / sort
+#include<cassert>    // assert(NDEBUG を定義すると無効になる)
+#include<random>     // mt19937
 #include<set>
 #include<map>
-#include<chrono>
+#include<chrono>     // 思考時間の計測
 #include<string>
-#include<fstream>
+#include<fstream>    // 教師データ・重みファイルの入出力
 #include<sstream>
-#include<climits>
+#include<climits>    // INT_MIN(UNDO_MOVE で使う)
 # include <stdio.h>
 
+// std:: を省略して書けるようにする(ヘッダでの使用は本来避けるべきだが、本プロジェクトは全体でこの前提)。
 using namespace std;
 
+// ---- 乱数 -------------------------------------------------------------------
+// 同点の最善手からの選択や、ランダム手で使う乱数生成器(メルセンヌ・ツイスタ)。
+// 引数なしで構築しているので、種は既定値 5489 に固定され、毎回同じ乱数列になる(結果の再現性のため)。
+// 実行ごとに変えたいときは下のコメントアウトされた行(random_device で種を取る)を使う。
+// `inline` 変数(C++17)にしてあるので、複数の .cpp から include されても実体は 1つになる。
 // inline mt19937 rng(random_device{}());
 inline mt19937 rng;
+
+// ---- 列挙型 -----------------------------------------------------------------
+// Cell : 1マスの状態。None = 空き、Me = 手番側の石、You = 相手の石。
+//        盤面は「白/黒」ではなく「手番側/相手側」で持つ(board.hpp の Board::Me / You)。
 enum Cell{None, Me, You};
+
+// State: 着手した結果の対局状態。
+//        Continue = 続行、End = 着手した側が 4つ並べて勝った、Invalid = 不正な着手、
+//        Undo = 人間が「一手戻る」を選んだ(人間の入力処理だけが使う)。
 enum State{Continue, End, Invalid, Undo};   // Undo: 人間手番での「一手戻る」要求(値追加は既存経路に無影響)
-enum Color{Draw, Black, White};
+
+// Color: 色。Draw = 引き分け(勝者なし)、White = 先手(白)、Black = 後手(黒)。
+enum Color{Draw, White, Black};
 
 // undo 要求を表す番兵座標。合法手は正規化後 {0..3, 0..3} なので、この値と衝突しない。
+// (人間プレイヤーの入力関数が「座標の代わりにこれを返す」ことで undo を伝える)
 const pair<int, int> UNDO_MOVE = {INT_MIN, INT_MIN};
 
+// ---- 盤の大きさと座標 -------------------------------------------------------
+// 盤は 1 辺 SIZE = 4 の立方体。x, y が水平方向、z が高さ(z = 0 が最下段)。
 const int SIZE = 4;
-#define IDX(x, y, z) ((x) + (y) * SIZE + (z) * SIZE * SIZE)
-#define BIT(x, y, z) (1uLL << IDX(x, y, z))
-#define X(idx) ((idx) % SIZE)
-#define Y(idx) ((idx) / SIZE % SIZE)
-#define Z(idx) ((idx) / SIZE / SIZE)
-const int BOARD_SIZE = SIZE * SIZE * SIZE;
-const int INF = 1e9;
-const int LINES_NUM = 76;
 
+// 座標 (x, y, z) → マス番号(0〜63)。
+//   マス番号 = x + 4y + 16z
+// つまり「x が最下位、次に y、最上位が z」の順に並ぶ。
+//   z = 0(1段目)… 0〜15番、z = 1(2段目)… 16〜31番、
+//   z = 2(3段目)… 32〜47番、z = 3(4段目)… 48〜63番。
+// この番号をそのまま 64 bit 整数のビット位置として使う(ビットボード)。
+#define IDX(x, y, z) ((x) + (y) * SIZE + (z) * SIZE * SIZE)
+
+// 座標 (x, y, z) のマスだけが 1 になった 64 bit 値。1uLL は unsigned long long 型の 1。
+#define BIT(x, y, z) (1uLL << IDX(x, y, z))
+
+// マス番号 → 座標(IDX の逆変換)。
+#define X(idx) ((idx) % SIZE)          // 下位 2 bit
+#define Y(idx) ((idx) / SIZE % SIZE)   // 中位 2 bit
+#define Z(idx) ((idx) / SIZE / SIZE)   // 上位 2 bit
+
+const int BOARD_SIZE = SIZE * SIZE * SIZE;   // 総マス数 = 64(ちょうど 64 bit 整数 1個に収まる)
+const int INF = 1e9;                         // 探索での「勝ち」の点数(無限大の代わり)
+const int LINES_NUM = 76;                    // 4つ並べると勝ちになる直線の総数
+
+// ---- 勝ちライン -------------------------------------------------------------
+// LINES[i] は i 番目の勝ちラインに含まれる 4マスのビットを立てた 64 bit 値。
+// 中身はここでは空で、プログラム開始時に board.hpp の init_lines() が埋める。
+// 並び順(init_lines() の生成順):
+//   [ 0..15] 縦(z 方向)   … 添字 = 4x + y
+//   [16..31] x 方向         … 添字 = 16 + 4y + z
+//   [32..47] y 方向         … 添字 = 32 + 4z + x
+//   [48..55] yz 平面の斜め  … x を固定(x ごとに 2本)
+//   [56..63] zx 平面の斜め  … y を固定(y ごとに 2本)
+//   [64..71] xy 平面の斜め  … z を固定(z ごとに 2本)
+//   [72..75] 立体の対角線   … 4本
+//   合計 16 + 16 + 16 + 8 + 8 + 8 + 4 = 76本
 inline array<unsigned long long, LINES_NUM> LINES;
+
+// ---- 探索で手を試す順番 -----------------------------------------------------
+// αβ探索は良い手から先に読むほど枝刈りが効く。そこで盤のマスを 3グループに分け、
+// グループ順に候補手を試す。各要素は「そのグループに属するマス」のビット集合。
+// 64 bit 値は 16 bit(4桁の 16 進数)ずつ 1段に対応する:
+//   0x 9009 0660 0660 9009
+//      ↑4段 ↑3段 ↑2段 ↑1段
+// 1段 16 bit の中では「bit = x + 4y」なので、例えば
+//   0x9009 = bit 0, 3, 12, 15 = 4 隅、0x0660 = bit 5, 6, 9, 10 = 中央 4マス。
+//
+// ※コメントアウトされた行は、過去に試したグループ分けの候補。
 inline constexpr unsigned long long move_order[] = {
 	//BIT(0, 0, 0) | BIT(0, 3, 0) | BIT(3, 0, 0) | BIT(3, 3, 0) |
 	//BIT(1, 1, 1) | BIT(1, 2, 1) | BIT(2, 1, 1) | BIT(2, 2, 1) |
 	//BIT(1, 1, 2) | BIT(1, 2, 2) | BIT(2, 1, 2) | BIT(2, 2, 2) |
 	//BIT(0, 0, 3) | BIT(0, 3, 3) | BIT(3, 0, 3) | BIT(3, 3, 3),// first
 	//0x9009000006609009uLL,
-	0x9009066006609009uLL,//first 核
+	// 第1グループ: コーナー 8点(1・4段目の 4 隅)+ コア 8点(2・3段目の中央 4マス)の計 16マス。
+	// これらは立体の対角線上にあり、1マスを通る勝ちラインが最も多い(7本)。
+	0x9009066006609009uLL,//first コアとコーナー
 	//0x0000ffffffff0000uLL,
+	// 第 2グループ: 1段目を除く残りのマス(2・3段目の中央以外 12マスずつ + 4段目の隅以外 12マス)。
 	0x6ff6f99ff99f0000uLL,//second 1段目以外
 	//0x0000ffffffffffffuLL,//4段目以外
 	//0xffff0000ffffffffuLL,//3段目以外
@@ -56,5 +131,7 @@ inline constexpr unsigned long long move_order[] = {
 	//0x0000000090090000uLL,
 	//0x0000900900000000uLL,
 	//0xffff000000000000uLL,
+	// 第 3グループ: 1段目の隅以外 12マス(最後に読む)。
 	0x0000000000006ff6uLL,// last
 };
+// 3グループの和集合が全 64マスになることは、init_lines() の最後で assert により確認している。

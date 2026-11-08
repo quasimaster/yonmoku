@@ -1,3 +1,17 @@
+// =============================================================================
+//  endgame_universal.hpp(コメント付き)
+//  解説: c109-gijutsushoten/explanation/ の解説 tex
+//
+//  最終盤の勝敗を読み切るソルバー(空きマス 12以下)。結果は勝ち(+1)/ 引き分け(0)/ 負け(-1)の 3値で、
+//  何手で勝つかは区別しない。ai_player_pvs_inc_id*.hpp が USE_ENDGAME_UNIVERSAL = 1 のときに使う(既定は使わない)。
+//  endgame_exact.hpp と違い、局面の形による条件(ゲート)は無く、どの局面でも正しい値を返す。
+//    - 決勝点の集合 rm / ry を引き継ぎ、新しく置いた石を通るライン(4〜7本)だけで更新する
+//    - 相手の決勝点の真下には置かない(置くと相手がすぐ勝つ)
+//    - 空きマスが 6以上のときは、各マスの状態(空 / 自 / 相手)を 3進数で表した番号で結果を覚える(衝突しない)
+//  init_lines() と init_sq_lines() を先に呼んでおくこと。
+//
+//  ★元のコードからの変更は、先手を白・後手を黒とする色の名前の入れ替え(enum Color など)と、コメントの追加だけである。
+// =============================================================================
 #pragma once
 #include "board_inc.hpp"
 #include <cstdint>
@@ -10,9 +24,13 @@
 // Score is WDL, not distance to mate. Caller handles already finished games.
 namespace endgame_universal {
 using U64 = unsigned long long;
+// 探索の統計(ノード数、ラインの更新回数、除いた手の数、メモの再利用回数)。
 struct Stats { unsigned long long nodes = 0, line_updates = 0, removed_moves = 0, memo_hits = 0; };
 
+// メモの 1要素。lower / upper はその局面の値の下限 / 上限(-1..1)。generation が今の世代でなければ未使用。
 struct Entry { uint32_t generation = 0; int8_t lower = -1, upper = 1; };
+// メモの表。begin(free) で、空きマスごとに 3進数の桁の重み power[マス] = 3^k を決め、世代を 1 進める。
+// 局面の番号 code = Σ(そのマスの状態 1 または 2)× power[マス](空きなら 0)。
 struct Workspace {
     std::vector<Entry> entries;
     uint32_t generation = 0;
@@ -34,6 +52,12 @@ struct Workspace {
     }
 };
 
+// -----------------------------------------------------------------------------
+// visit: αβ探索で手番側(me)から見た値 +1 / 0 / -1 を返す。
+//   hand: 合法手、rm / ry: 手番側 / 相手の決勝点(空きマスのみ)、empty: 空きマスの数。
+//   自分の決勝点に置ければ勝ち。相手の決勝点が 2つ以上あれば負け、1つならそこをふさぐ。
+//   空きマスが 2以下なら、安全な手を指せば相手に勝つ手は残らないので引き分け。
+// -----------------------------------------------------------------------------
 template<bool Count, bool Memo = false>
 inline int visit(U64 me, U64 you, U64 hand, U64 rm, U64 ry,
                  int empty, int alpha, int beta, Stats* stats, Workspace* workspace = nullptr, int code = 0)
@@ -109,6 +133,7 @@ inline int visit(U64 me, U64 you, U64 hand, U64 rm, U64 ry,
     return best;
 }
 
+// solve_tree: メモを使わずに読み切る(空きマスが少ないとき用)。
 template<bool Count = false>
 inline int solve_tree(const Board& b, Stats* stats = nullptr)
 {
@@ -128,6 +153,7 @@ inline int solve_tree(const Board& b, Stats* stats = nullptr)
 // A fresh generation isolates each root without clearing the whole ternary table.
 // The direct ternary address has no hash collision. Bounds are kept separately.
 // Short tails use the same universal recurrence without memo bookkeeping.
+// solve: 入口。空きマスが 5以下ならメモなし、6以上ならメモありで読み切る。
 template<bool Count = false>
 inline int solve(const Board& b, Stats* stats = nullptr)
 {

@@ -1,3 +1,15 @@
+// =============================================================================
+//  endgame_exact.hpp(コメント付き)
+//  解説: c109-gijutsushoten/explanation/ の解説 tex
+//
+//  最終盤(残り 6マス以下、turn >= 59)の厳密な判定。ai_player_pvs_inc_id*.hpp が USE_ENDGAME_CUT = 1 のときに使う。
+//  考え方は本文tex の形勢判断と同じで、浮き決勝点がどの段にあるかで勝敗を決める。
+//    白(先手)は奇数段(実際には 3段目 = Tポイント)の決勝点、黒(後手)は偶数段(2段目・4段目)の決勝点が勝ちにつながる。
+//    複数の色の決勝点があるときは、低い段の決勝点を持つ側が先に勝つ(低段優先)。
+//  rB / rW は、色の入れ替えに合わせて rW(白の決勝点)/ rB(黒の決勝点)と名前を入れ替えた。
+//
+//  ★元のコードからの変更は、先手を白・後手を黒とする色の名前の入れ替え(enum Color など)と、コメントの追加だけである。
+// =============================================================================
 #pragma once
 
 #include "common.hpp"
@@ -8,19 +20,19 @@
 // 設計: docs/設計書/最終盤/implementation-plan-endgame-exact.md
 // 研究: 研究/最終盤評価関数_研究結果.md / 研究/最終盤評価関数_追加検証.md
 //
-// 本ヘッダは 2 つの部品を提供する。
+// 本ヘッダは 2つの部品を提供する。
 //   (1) endgame_value()  … 段パリティ定理 + 低段優先による手番視点の勝敗値(規則 R2)
 //   (2) endgame_gate()   … 「R2 が厳密であることを証明できる局面」に限定するゲート
 // ゲートを通過した局面でのみ (1) は【厳密】であり、level に無関係に部分木を刈ってよい。
 // ゲートを通過しない局面については何も断定しない(呼び出し側は通常探索を続ける)。
 //
-// 【前提】どちらの関数も「制約(C): 即座に置けるマスの上に双方のリーチが無い」の
+// 【前提】どちらの関数も「制約(C): 即座に置けるマスの上に双方の決勝点が無い」の
 //         成立する位置でのみ呼ぶこと。探索側では ai_player_pvs_inc_id.hpp の
 //         reach ブロック内 `else`(= 即勝ちも阻止強制も無い枝)がその唯一の位置である。
 
-static const unsigned long long EG_MASK_2 = 0x00000000ffff0000uLL;   // 段2 (z=1)
-static const unsigned long long EG_MASK_3 = 0x0000ffff00000000uLL;   // 段3 (z=2)
-static const unsigned long long EG_MASK_4 = 0xffff000000000000uLL;   // 段4 (z=3)
+static const unsigned long long EG_MASK_2 = 0x00000000ffff0000uLL;   // 2段目 (z=1)
+static const unsigned long long EG_MASK_3 = 0x0000ffff00000000uLL;   // 3段目 (z=2)
+static const unsigned long long EG_MASK_4 = 0xffff000000000000uLL;   // 4段目 (z=3)
 
 // 勝ちスコアの絶対値。現行 evaluate_alpha_t.hpp の turn>=60 分岐と同じ規約。
 //   即勝ち INF - turn(≈ 999,999,940)より小さい ⇒ 即詰み優先の順序は保たれる
@@ -34,7 +46,7 @@ static const int EG_WIN = INF - 100000;
 inline int endgame_value(const Board &b, const int turn,
                          const unsigned long long rMe_raw, const unsigned long long rYou_raw)
 {
-	// 評価関数エントリ(evaluate_alpha_inc_tbl.hpp:211-212)と同じ正規化(空きマス上のリーチだけ残す)
+	// 評価関数エントリ(evaluate_alpha_inc_tbl.hpp:211-212)と同じ正規化(空きマス上の決勝点だけ残す)
 	unsigned long long rMe  = rMe_raw  & ~b.You;
 	unsigned long long rYou = rYou_raw & ~b.Me;
 
@@ -43,23 +55,23 @@ inline int endgame_value(const Board &b, const int turn,
 	rMe  &= ~(rYou    << SIZE * SIZE);
 	rYou &= ~(rMe_tmp << SIZE * SIZE);
 
-	// 段3 の「両者リーチ」(evaluate_alpha_t.hpp:49-51 と同一)。段3 は奇数段なので黒の脅威。
+	// 3段目の「両者決勝点」(evaluate_alpha_t.hpp:49-51 と同一)。3段目は奇数段なので白の脅威。
 	const unsigned long long inter3 = (rMe & rYou) & EG_MASK_3;
 	rMe  ^= inter3;
 	rYou ^= inter3;
 
-	const enum Color now = ((turn - 1) & 1) ? Color::White : Color::Black;   // 7a と同じ導出
-	const unsigned long long rB = (now == Color::Black) ? rMe  : rYou;
-	const unsigned long long rW = (now == Color::Black) ? rYou : rMe;
+	const enum Color now = ((turn - 1) & 1) ? Color::Black : Color::White;   // 7a と同じ導出
+	const unsigned long long rW = (now == Color::White) ? rMe  : rYou;
+	const unsigned long long rB = (now == Color::White) ? rYou : rMe;
 
-	// 段パリティ定理: 黒は奇数段(制約(C) の下で実効は段3)、白は偶数段(段2・段4)。
+	// 段パリティ定理: 白は奇数段(制約(C) の下で実効は3段目)、黒は偶数段(2段目・4段目)。
 	// 低段優先: 有効な脅威が複数あるとき最も低い段の保有者が勝つ。判定順序が本質。
-	int v = 0;                                       // +1 = 黒勝ち / -1 = 白勝ち
-	if      (rW & EG_MASK_2)             v = -1;     // 白の段2
-	else if ((rB & EG_MASK_3) || inter3) v = +1;     // 黒の段3
-	else if (rW & EG_MASK_4)             v = -1;     // 白の段4
+	int v = 0;                                       // +1 = 白勝ち / -1 = 黒勝ち
+	if      (rB & EG_MASK_2)             v = -1;     // 黒の2段目
+	else if ((rW & EG_MASK_3) || inter3) v = +1;     // 白の3段目
+	else if (rB & EG_MASK_4)             v = -1;     // 黒の4段目
 	if (!v) return 0;
-	return ((now == Color::Black) ? v : -v) * EG_WIN;
+	return ((now == Color::White) ? v : -v) * EG_WIN;
 }
 
 // ---------------------------------------------------------------- ゲート
@@ -71,15 +83,19 @@ inline int endgame_value(const Board &b, const int turn,
   #define EG_USE_SSE2 0
 #endif
 
-// cnt[i] = (Me 石数 << 4) | You 石数。80 byte(76 本 + 0 初期化パディング 4)。
+// cnt[i] = (Me 石数 << 4) | You 石数。80 byte(76本 + 0 初期化パディング 4)。
 //   G_A  : 「2石 + 空き2」のラインが無い          = cnt が 0x20 / 0x02 でない
 //   G_A2 : G_A に加えて「1石 + 空き3」も無い      = cnt が 0x10 / 0x20 / 0x01 / 0x02 でない
 // 判定値集合はどちらもニブル交換に対して対称なので place_fast_clone の Me/You スワップの影響を受けない。
 // パディングは 0x00 なのでどちらの集合にも当たらない。
 
+// SWAR(1つの 64 bit 整数を 8バイトの並びとして扱う)でのバイト検索。
+// EG_HASZERO(v)    : v の 8バイトのどれかが 0 なら 0 でない値になる(よく知られたビット演算)。
+// EG_HASVALUE(x, n): x の 8バイトのどれかが n に等しいか(n を 8バイトに並べて XOR し、0 のバイトを探す)。
 #define EG_HASZERO(v)     (((v) - 0x0101010101010101uLL) & ~(v) & 0x8080808080808080uLL)
 #define EG_HASVALUE(x, n) EG_HASZERO((x) ^ (0x0101010101010101uLL * (unsigned long long)(n)))
 
+// ゲート G_A を SWAR で判定する(cnt の 80バイトを 8バイト × 10個として調べる)。
 inline bool eg_gate_A_swar(const unsigned long long *cnt64)
 {
 	unsigned long long acc = 0uLL;
@@ -104,6 +120,7 @@ inline bool eg_gate_A2_swar(const unsigned long long *cnt64)
 }
 
 #if EG_USE_SSE2
+// ゲート G_A / G_A2 を SSE2 で判定する(16バイトずつ比較する)。
 inline bool eg_gate_A_sse2(const unsigned char *cnt)
 {
 	const __m128i a = _mm_set1_epi8(0x20), b = _mm_set1_epi8(0x02);
@@ -151,11 +168,11 @@ inline bool endgame_gate_A2(const BoardInc &b)
 }
 
 // G_T: 空きマス3個以上の柱が高々1本。
-// 柱の空きは必ず上から連続するので「空きマス3個以上」⟺「段2 のマスが空」。
+// 柱の空きは必ず上から連続するので「空きマス3個以上」⟺「2段目のマスが空」。
 inline bool endgame_tall_le1(const Board &b)
 {
 	const unsigned long long x = ~(b.Me | b.You) & EG_MASK_2;
-	return (x & (x - 1)) == 0uLL;      // 立っているビットが 0 個または 1 個
+	return (x & (x - 1)) == 0uLL;      // 立っているビットが 0個または 1個
 }
 
 // 手数に応じてゲートを切り替える(証明可能な範囲 turn >= 59 に一致させる)。

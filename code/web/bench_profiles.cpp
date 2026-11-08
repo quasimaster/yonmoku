@@ -1,5 +1,13 @@
+// =============================================================================
+//  bench_profiles.cpp(コメント付き)
+//  解説: c109-gijutsushoten/explanation/ の解説 tex
+//
+//  難易度プロファイルごとに、1手あたりの思考時間を測るベンチマーク。
+//
+//  ★元のコードからの変更は、先手を白・後手を黒とする色の名前の入れ替え(enum Color など)と、コメントの追加だけである。
+// =============================================================================
 // 難易度プロファイルごとの実測ハーネス(Web ビルドには含めない)。
-// 1 手あたりの最大 / 平均思考時間を測り、ブラウザで実用になる読み手数を決めるために使う。
+// 1手あたりの最大 / 平均思考時間を測り、ブラウザで実用になる読み手数を決めるために使う。
 //   g++ -std=c++17 -O2 -DBENCH -DYON_NO_MAIN -DYON_DEPTH_TARGET=yon_depth_target \
 //       code/web/engine_api.cpp code/web/bench_profiles.cpp -o build/bench_profiles.exe
 //   引数: [計測するプロファイル番号...]  省略時は全プロファイル
@@ -9,7 +17,7 @@
 
 extern "C" {
 	void   yon_init(void);
-	void   yon_new_game(int human_is_black, int profile);
+	void   yon_new_game(int human_is_white, int profile);
 	int    yon_think(void);
 	int    yon_status(void);
 	int    yon_move_count(void);
@@ -37,7 +45,7 @@ int main(int argc, char** argv)
 			if (!wanted) continue;
 		}
 
-		yon_new_game(0, i);          // AI = 黒。AI vs AI で 1 局完走させる
+		yon_new_game(0, i);          // AI = 白。AI vs AI で 1局完走させる
 		double total = 0.0, mx = 0.0, nodes = 0.0;
 		int mx_turn = 0, moves = 0;
 		int guard = 0;

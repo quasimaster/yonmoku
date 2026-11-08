@@ -1,8 +1,18 @@
+// =============================================================================
+//  engine_api2.cpp(コメント付き)
+//  解説: c109-gijutsushoten/explanation/ の解説 tex
+//
+//  engine_api.cpp に、モデルの選択(alpha / core)、読みの深さのスケジュール表、研究モード(局面の解析)を足した版。
+//  core モデルは main_core2.cpp と同じ高速化版のヘッダ(ai_player_pvs_inc_id2.hpp、evaluate_core2.hpp など)を使う。
+//  ★公開関数の名前(yon_black など)は web/ の JavaScript から呼ばれるので変えていない。名前の black は先手(白)を指す。
+//
+//  ★元のコードからの変更は、先手を白・後手を黒とする色の名前の入れ替え(enum Color など)と、コメントの追加だけである。
+// =============================================================================
 // ===== 立体四目並べ Web 版 エンジン API(モデル選択 + 読み手数スケジュール版)=====
 // 設計: docs/設計書/Web公開/implementation-plan-model-select-and-custom-depth.md
 //       調査: docs/設計書/Web公開/investigation-model-select-and-custom-depth.md
 //
-// 流用元 code/web/engine_api.cpp との差分は次の 4 点だけで、
+// 流用元 code/web/engine_api.cpp との差分は次の 4点だけで、
 // 盤面・棋譜・undo・評価値の正規化・状態遷移は完全に同一。
 //   1. alpha を _w 版ヘッダ(engine_api_w.cpp と同じ経路)に載せ替える
 //      ★非 _w 版 evaluate_alpha_inc_tbl.hpp は flag_tbl[256] が eval_weights.hpp と衝突するので
@@ -10,7 +20,7 @@
 //        (docs/実行結果/benchmark-results-eval-weights-file.md §6)。
 //   2. main_core2.cpp と同じヘッダ一式(tt2 / board_inc2 / ai_player_pvs_inc_id2 / evaluate_core2)を
 //      同居させ、yon_set_model() で alpha / core を切り替える
-//   3. 読み手数を「固定 4 バケット」から「最大 8 行のスケジュール表」に変える
+//   3. 読み手数を「固定 4 バケット」から「最大 8行のスケジュール表」に変える
 //   4. 置換表は一律 22 bit(64 MB)。プロファイル毎の tt_bits は使わない
 //
 // ★core の重みは WASM からファイルを読めないので --embed-file で MEMFS に埋め込む(web/build.ps1)。
@@ -62,7 +72,7 @@ using AICore  = AIPlayerPVSIncID2<EvalFnCore2>;
 
 // ===== モデル =====
 // 1 モデル = (探索エンジン, 重みファイル) の組。重みは web/build.ps1 が --embed-file で
-// MEMFS の /weights/... に埋め込む。新しい重みを足すときはこの表に 1 行足すだけでよい。
+// MEMFS の /weights/... に埋め込む。新しい重みを足すときはこの表に 1行足すだけでよい。
 //   ★model 0 は組み込み既定値(ver7.2)で、公開中の Web 版と完全に同じ挙動になる。既定はこれ。
 static const int ENGINE_ALPHA = 0;   // ai_player_pvs_inc_id  + evaluate_alpha_inc_tbl_w  (main_alpha_..._w 相当)
 static const int ENGINE_CORE  = 1;   // ai_player_pvs_inc_id2 + evaluate_core2            (main_core2 相当)
@@ -133,18 +143,18 @@ static AIAlpha*                  g_alpha   = nullptr;  // ★使っていない�
 static AICore*                   g_core    = nullptr;
 static Player*                   g_cur     = nullptr;  // g_alpha か g_core のどちらか
 static int                       g_model   = MODEL_DEFAULT;
-static bool                      g_human_is_black = true;
+static bool                      g_human_is_white = true;
 static int                       g_profile = PROFILE_DEFAULT;   // -1 = カスタム(表を直接編集した)
 static bool                      g_eval_sec = false;   // いま evaluate_func に入っている sec(§2.4)
 // 研究モードの解析セッション(詳細は「研究モード」節)。対局経路から参照するのでここで宣言する。
 static bool                      g_ana_live     = false;   // 同じ局面の解析を継続中か
 static bool                      g_ana_dirty_tt = false;   // 解析が置換表を汚したか(対局へ戻る前に捨てる)
-static int                       g_status  = 0;        // 0=継続 1=黒勝ち 2=白勝ち 3=引分
+static int                       g_status  = 0;        // 0=継続 1=白勝ち 2=黒勝ち 3=引分
 static bool                      g_inited  = false;
 
 // 直前の思考結果(yon_think / yon_analyze が更新)
 static int       g_last_sq          = -1;
-static int       g_last_score_black = 0;      // ★常に黒視点に正規化した評価値
+static int       g_last_score_white = 0;      // ★常に白視点に正規化した評価値
 static bool      g_last_valid       = false;
 static bool      g_last_mate        = false;  // 即勝ち手を見つけた(探索を経ていない)
 static double    g_last_ms          = 0.0;
@@ -154,8 +164,8 @@ static long long g_last_nodes       = 0;
 static const int MATE_SCORE = 1000000;
 
 // ===== 重み =====
-// モデルごとに 1 つ持つ。version 1(alpha 用)も version 2(core 用)も EvalWeightsCore2 が読める
-// (version 1 は core 項を 0 として読む)。読み込みは最初に必要になったときの 1 回だけ。
+// モデルごとに 1つ持つ。version 1(alpha 用)も version 2(core 用)も EvalWeightsCore2 が読める
+// (version 1 は core 項を 0 として読む)。読み込みは最初に必要になったときの 1回だけ。
 static EvalWeightsCore2 g_w[MODEL_NUM];
 static unsigned char    g_w_state[MODEL_NUM];   // 0 = 未試行 / 1 = 読めた / 2 = 読めなかった
 
@@ -224,10 +234,10 @@ inline int yon_depth_target(int turn, int level)
 // ===== 補助 =====
 
 // 絶対色のビットボード。Board::print() と同じ変換。
-static inline void abs_bits(unsigned long long& black, unsigned long long& white)
+static inline void abs_bits(unsigned long long& white, unsigned long long& black)
 {
-	if (g_board.validate() == Color::Black) { black = g_board.Me; white = g_board.You; }
-	else                                    { black = g_board.You; white = g_board.Me; }
+	if (g_board.validate() == Color::White) { white = g_board.Me; black = g_board.You; }
+	else                                    { white = g_board.You; black = g_board.Me; }
 }
 
 // (x, y) に石を落としたときの z。満杯なら -1。
@@ -263,7 +273,7 @@ static void replay_from_hand()
 		const enum State r = g_board.place(g_hand[i].first, g_hand[i].second);
 		if (r == State::End)
 		{
-			// i 手目(0 始まり)を指した側の勝ち。偶数 index = 黒。
+			// i 手目(0 始まり)を指した側の勝ち。偶数 index = 白。
 			g_status = (i % 2 == 0) ? 1 : 2;
 			break;
 		}
@@ -307,26 +317,26 @@ static void ensure_ai()
 		clear_tt();
 	}
 
-	// AI が持つ色に応じた評価関数(先手用 / 後手用)。人間が黒なら AI は白(= sec)。
+	// AI が持つ色に応じた評価関数(先手用 / 後手用)。人間が白なら AI は黒(= sec)。
 	if (g_alpha)
 	{
 		g_alpha->set_game(g_dummy);
 		g_alpha->level = sched_head_ply();
 		g_alpha->set_random(0);                      // MVP ではランダム手を使わない
-		g_alpha->evaluate_func = EvalFn{alpha_weights(g_model), g_human_is_black};
+		g_alpha->evaluate_func = EvalFn{alpha_weights(g_model), g_human_is_white};
 	}
 	else if (g_core)
 	{
 		g_core->set_game(g_dummy);
 		g_core->level = sched_head_ply();
 		g_core->set_random(0);
-		g_core->evaluate_func = EvalFnCore2{model_weights(g_model), g_human_is_black};
+		g_core->evaluate_func = EvalFnCore2{model_weights(g_model), g_human_is_white};
 	}
-	g_eval_sec = g_human_is_black;   // ★研究モードの set_eval_side() と食い違わせない
+	g_eval_sec = g_human_is_white;   // ★研究モードの set_eval_side() と食い違わせない
 }
 
 // 評価関数の先後エントリ(EvalFn::sec)を差し替える。
-//   false = 先手用 / true = 後手用。対局モードは「AI の色」で固定だが(= g_human_is_black)、
+//   false = 先手用 / true = 後手用。対局モードは「AI の色」で固定だが(= g_human_is_white)、
 //   研究モードは任意手番の局面を解析するので「解析する局面の手番」に合わせる必要がある。
 //   ★評価値の意味が変わるので、切り替えたら置換表は必ず捨てる。
 static void set_eval_side(bool sec)
@@ -358,15 +368,15 @@ static void search_only(int* out_sq, int* out_score_mover, bool* out_mate)
 	// ★研究モードの解析は (1) 先後エントリを解析局面の手番に合わせ、(2) 置換表に
 	//   対局の設定よりずっと深い結果を残す。どちらも対局へ持ち越すと挙動が変わるので、
 	//   対局経路に入るところで必ず元へ戻す。研究モードを使わなければ何も起こらない(挙動不変)。
-	set_eval_side(g_human_is_black);
+	set_eval_side(g_human_is_white);
 	if (g_ana_dirty_tt) { clear_tt(); g_ana_dirty_tt = false; g_ana_live = false; }
 
 	const int turn = g_board.turn();               // move() 内部と同じ値(石数 + 1)
-	const bool black_to_move = (turn % 2 == 1);
+	const bool white_to_move = (turn % 2 == 1);
 
 	// move() は即勝ち手を見つけると評価値を書かずに return する。
 	// 事前に番兵 INF を入れておき、書き換わったかどうかで判定する。
-	int* slot = black_to_move ? &g_dummy->evaluatesfir_tmp[(turn + 1) / 2]
+	int* slot = white_to_move ? &g_dummy->evaluatesfir_tmp[(turn + 1) / 2]
 	                          : &g_dummy->evaluatessec_tmp[turn / 2];
 	*slot = INF;
 
@@ -399,8 +409,8 @@ static void search_only(int* out_sq, int* out_score_mover, bool* out_mate)
 	}
 }
 
-// 手番側視点の評価値を黒視点に正規化する。
-static inline int to_black_view(int score_mover)
+// 手番側視点の評価値を白視点に正規化する。
+static inline int to_white_view(int score_mover)
 {
 	return (g_board.turn() % 2 == 1) ? score_mover : -score_mover;
 }
@@ -420,10 +430,10 @@ static enum State apply_move(int x, int y)
 // ===== 研究モード(任意局面の反復深化解析 + 上位 K 手)=====
 // 設計: docs/設計書/Web公開/implementation-plan-research-analysis.md
 //
-// 対局用の yon_think / search_only() は Player::move() を呼ぶので最善手 1 つしか得られない。
+// 対局用の yon_think / search_only() は Player::move() を呼ぶので最善手 1つしか得られない。
 // 研究では上位 K 手の評価値が要るため、ここに専用の root ループを持つ。
 //   ★CLI ヘッダは一切変更していない。evaluate_board / tt / killer / history はすべて public。
-//   ★1 回の呼び出し = 1 つの深さ。JS 側の N = 8, 10, 12, … ループがそのまま反復深化の梯子になる
+//   ★1回の呼び出し = 1つの深さ。JS 側の N = 8, 10, 12, … ループがそのまま反復深化の梯子になる
 //     (同じ局面の続きなら root 順・killer/history・置換表を引き継ぐので梯子の登り直しが起きない)。
 
 static const int ANA_MAX_K   = 5;
@@ -432,9 +442,9 @@ static const int ANA_MAX_PLY = 64;
 static int       g_ana_ply        = 0;    // 直前に解析した読み手数 N
 static int       g_ana_count      = 0;    // 候補手の件数
 static int       g_ana_sq   [ANA_MAX_K];
-static int       g_ana_score[ANA_MAX_K];  // ★黒視点に正規化済み
+static int       g_ana_score[ANA_MAX_K];  // ★白視点に正規化済み
 static int       g_ana_tied       = 0;    // 最下位と同値の可能性がある手の数
-static int       g_ana_forced     = 0;    // 0 = 通常 / 1 = 即勝ち / 2 = 相手リーチ阻止のみ
+static int       g_ana_forced     = 0;    // 0 = 通常 / 1 = 即勝ち / 2 = 相手決勝点阻止のみ
 static int       g_ana_complete   = 1;    // 1 = 完走 / 0 = 期限切れ
 static double    g_ana_ms         = 0.0;
 static long long g_ana_nodes      = 0;
@@ -515,7 +525,7 @@ static int ana_root_once(AI* ai, int d, int top_k, int deadline_ms,
 
 		// K 件そろうまでは窓が (-INF, INF) なのでそのまま探索(厳密値が要る)。
 		// そろったあとは null window で「K 位を上回るか」だけ先に調べ(scout)、
-		// 上回ったときだけ開いた窓で厳密値を取り直す。★これが無いと K=3 で 2〜6 倍かかる。
+		// 上回ったときだけ開いた窓で厳密値を取り直す。★これが無いと K=3 で 2〜6倍かかる。
 		int ev;
 		if (tn < top_k)
 		{
@@ -590,7 +600,7 @@ static int ana_root_once(AI* ai, int d, int top_k, int deadline_ms,
 	return 1;
 }
 
-// 現局面を N 手読みで 1 段だけ解析する。着手しない。
+// 現局面を N 手読みで 1段だけ解析する。着手しない。
 //   戻り値 1 = 完走 / 0 = 期限切れ / -1 = 解析不可 / -2 = 引数が不正
 static int analyze_impl(int n, int top_k, int fresh_tt, int deadline_ms)
 {
@@ -629,7 +639,7 @@ static int analyze_impl(int n, int top_k, int fresh_tt, int deadline_ms)
 			{
 				const unsigned long long b = h & -h;
 				g_ana_sq[g_ana_count]    = __builtin_ctzll(b);
-				g_ana_score[g_ana_count] = to_black_view(INF - turn);
+				g_ana_score[g_ana_count] = to_white_view(INF - turn);
 				g_ana_count++;
 				h ^= b;
 			}
@@ -639,7 +649,7 @@ static int analyze_impl(int n, int top_k, int fresh_tt, int deadline_ms)
 			g_ana_live   = false;          // 探索していないので引き継ぐ状態が無い
 			g_ana_last_d = -1;
 			g_last_sq          = g_ana_sq[0];
-			g_last_score_black = g_ana_score[0];
+			g_last_score_white = g_ana_score[0];
 			g_last_mate        = true;
 			g_last_valid       = true;
 			g_last_ms          = 0.0;
@@ -706,13 +716,13 @@ static int analyze_impl(int n, int top_k, int fresh_tt, int deadline_ms)
 	g_ana_sec      = sec;
 	g_ana_last_d   = d;
 
-	for (int i = 0; i < g_ana_count; i++) g_ana_score[i] = to_black_view(g_ana_score[i]);
+	for (int i = 0; i < g_ana_count; i++) g_ana_score[i] = to_white_view(g_ana_score[i]);
 
-	// HUD 互換のため既存の g_last_* も 1 位の値で更新する
+	// HUD 互換のため既存の g_last_* も 1位の値で更新する
 	if (g_ana_count > 0)
 	{
 		g_last_sq          = g_ana_sq[0];
-		g_last_score_black = g_ana_score[0];
+		g_last_score_white = g_ana_score[0];
 		g_last_mate        = false;
 		g_last_valid       = true;
 		g_last_ms          = g_ana_ms;
@@ -738,16 +748,16 @@ EMSCRIPTEN_KEEPALIVE void yon_init(void)
 }
 
 // profile: 0..PROFILE_NUM-1 でプリセットを適用 / 負値なら現在のスケジュールを維持(カスタム)
-EMSCRIPTEN_KEEPALIVE void yon_new_game(int human_is_black, int profile)
+EMSCRIPTEN_KEEPALIVE void yon_new_game(int human_is_white, int profile)
 {
 	yon_init();
-	g_human_is_black = (human_is_black != 0);
+	g_human_is_white = (human_is_white != 0);
 	g_hand.clear();
 	g_board = Board();
 	g_status = 0;
 	g_last_valid = false;
 	g_last_sq = -1;
-	g_last_score_black = 0;
+	g_last_score_white = 0;
 	g_last_mate = false;
 	g_last_ms = 0.0;
 	g_last_nodes = 0;
@@ -758,9 +768,9 @@ EMSCRIPTEN_KEEPALIVE void yon_new_game(int human_is_black, int profile)
 }
 
 // 探索が使う乱数のシードを固定する(再現性が要るとき用。既定では誰も呼ばない)。
-//   ★AI は「最善評価が並んだ手」をランダムに 1 つ選ぶ(ai_player_pvs_inc_id.hpp:587)。
-//     乱数は common.hpp の グローバル `rng` 1 個で、対局をまたいでも巻き戻らない。
-//     そのため同じ設定で 2 局目以降を回すと着手が変わる。同じ局を再現したいときはここで固定する。
+//   ★AI は「最善評価が並んだ手」をランダムに 1つ選ぶ(ai_player_pvs_inc_id.hpp:587)。
+//     乱数は common.hpp の グローバル `rng` 1個で、対局をまたいでも巻き戻らない。
+//     そのため同じ設定で 2局目以降を回すと着手が変わる。同じ局を再現したいときはここで固定する。
 EMSCRIPTEN_KEEPALIVE void yon_set_seed(unsigned int seed)
 {
 	yon_init();
@@ -830,7 +840,7 @@ EMSCRIPTEN_KEEPALIVE int yon_think(void)
 	search_only(&sq, &score_mover, &mate);
 
 	g_last_sq = sq;
-	g_last_score_black = to_black_view(score_mover);   // ★ place() の前に評価する(手番が反転するため)
+	g_last_score_white = to_white_view(score_mover);   // ★ place() の前に評価する(手番が反転するため)
 	g_last_mate = mate;
 	g_last_valid = true;
 
@@ -849,7 +859,7 @@ EMSCRIPTEN_KEEPALIVE int yon_analyze(void)
 	search_only(&sq, &score_mover, &mate);
 
 	g_last_sq = sq;
-	g_last_score_black = to_black_view(score_mover);
+	g_last_score_white = to_white_view(score_mover);
 	g_last_mate = mate;
 	g_last_valid = true;
 	return sq;
@@ -857,11 +867,11 @@ EMSCRIPTEN_KEEPALIVE int yon_analyze(void)
 
 // --- 研究モード ---
 
-// 現局面を「N 手読み」で 1 段だけ解析する。★着手しない・棋譜を変えない
+// 現局面を「N 手読み」で 1段だけ解析する。★着手しない・棋譜を変えない
 //   n           : 読み手数(偶数、2 〜 64)
 //   top_k       : 返してほしい候補手の数(1〜5)
 //   fresh_tt    : 1 なら探索前に置換表をクリアする(厳密に N 手読みの値が欲しいとき)
-//   deadline_ms : >0 なら root 手を 1 つ探索し終えるたびに経過時間を見て打ち切る(0 = 無制限)
+//   deadline_ms : >0 なら root 手を 1つ探索し終えるたびに経過時間を見て打ち切る(0 = 無制限)
 //   戻り値      :  1 = 完走 / 0 = 期限切れで途中終了 / -1 = 解析不可 / -2 = 引数が不正
 EMSCRIPTEN_KEEPALIVE int yon_analyze_ply(int n, int top_k, int fresh_tt, int deadline_ms)
 {
@@ -882,7 +892,7 @@ EMSCRIPTEN_KEEPALIVE int    yon_ana_root_moves(void) { return g_ana_root_moves; 
 EMSCRIPTEN_KEEPALIVE int    yon_ana_max_k(void)      { return ANA_MAX_K; }
 EMSCRIPTEN_KEEPALIVE int    yon_ana_max_ply(void)    { return ANA_MAX_PLY; }
 
-// i 位の黒視点勝率 %(既存 yon_win_rate_black と同じシグモイド式)
+// i 位の白視点勝率 %(既存 yon_win_rate_black と同じシグモイド式)
 EMSCRIPTEN_KEEPALIVE double yon_ana_winrate(int i)
 {
 	if (i < 0 || i >= g_ana_count) return 50.0;
@@ -915,7 +925,7 @@ EMSCRIPTEN_KEEPALIVE int yon_ana_full_scores(int n, int* out_sq, int* out_score)
 			int m = 0;
 			unsigned long long h = r;
 			while (h) { const unsigned long long b = h & -h; out_sq[m] = __builtin_ctzll(b);
-			            out_score[m] = to_black_view(INF - g_board.turn()); m++; h ^= b; }
+			            out_score[m] = to_white_view(INF - g_board.turn()); m++; h ^= b; }
 			return m;
 		}
 		const unsigned long long y = hand & Board::reach(g_board.You);
@@ -958,14 +968,14 @@ EMSCRIPTEN_KEEPALIVE int yon_ana_full_scores(int n, int* out_sq, int* out_score)
 		while (j >= 0 && sc[j] < ks) { sc[j + 1] = sc[j]; sq[j + 1] = sq[j]; j--; }
 		sc[j + 1] = ks; sq[j + 1] = kq;
 	}
-	for (int i = 0; i < m; i++) { out_sq[i] = sq[i]; out_score[i] = to_black_view(sc[i]); }
+	for (int i = 0; i < m; i++) { out_sq[i] = sq[i]; out_score[i] = to_white_view(sc[i]); }
 
 	g_ana_live = false;   // 探索の作法が違うのでセッションは引き継がない
 	return m;
 }
 
-// 1 手だけ巻き戻す(研究モード用)。戻り値: 巻き戻し後の手数
-//   ★既存 yon_undo は「AI 手 + 人間手」の 2 手戻しなので研究には使えない
+// 1手だけ巻き戻す(研究モード用)。戻り値: 巻き戻し後の手数
+//   ★既存 yon_undo は「AI 手 + 人間手」の 2手戻しなので研究には使えない
 EMSCRIPTEN_KEEPALIVE int yon_undo_one(void)
 {
 	yon_init();
@@ -983,8 +993,8 @@ EMSCRIPTEN_KEEPALIVE int yon_undo_one(void)
 EMSCRIPTEN_KEEPALIVE int yon_undo(void)
 {
 	yon_init();
-	// 人間の手の index パリティ: 黒番なら偶数、白番なら奇数
-	const size_t human_parity = g_human_is_black ? 0 : 1;
+	// 人間の手の index パリティ: 白番なら偶数、黒番なら奇数
+	const size_t human_parity = g_human_is_white ? 0 : 1;
 	int j = (int)g_hand.size();
 	while (j > 0 && (size_t)(j - 1) % 2 != human_parity) j--;   // 末尾の AI 手を読み飛ばす
 	if (j == 0) return (int)g_hand.size();                      // 戻せる人間手が無い
@@ -1014,6 +1024,9 @@ EMSCRIPTEN_KEEPALIVE int yon_load(const int* xy, int len)
 
 // --- 問い合わせるだけの関数(局面を変えない) ---
 
+// ★関数名の black / white について: これらは web/main.js・web/worker.js から呼ばれる公開 API なので、名前は元のまま残している。
+//   名前の black は「先手」= 本文tex の白、white は「後手」= 本文tex の黒を指す。
+//   yon_black() は先手(白)の石、yon_white() は後手(黒)の石を返す(abs_bits の 1つ目の引数が先手の石)。
 EMSCRIPTEN_KEEPALIVE unsigned long long yon_black(void)
 {
 	unsigned long long b, w; abs_bits(b, w); return b;
@@ -1039,22 +1052,25 @@ EMSCRIPTEN_KEEPALIVE int yon_status(void) { return g_status; }
 EMSCRIPTEN_KEEPALIVE int yon_turn(void)   { return g_board.turn(); }
 EMSCRIPTEN_KEEPALIVE int yon_move_count(void) { return (int)g_hand.size(); }
 
-// 次に指すのが黒か(1 = 黒番)
+// 次に指すのが白か(1 = 白番)
+// yon_black_to_move: 次に指すのが先手(白)なら 1。yon_human_is_black: 人間が先手(白)なら 1。
+// (名前の black は先手を指す。上の★を参照)
 EMSCRIPTEN_KEEPALIVE int yon_black_to_move(void) { return g_board.turn() % 2 == 1 ? 1 : 0; }
-EMSCRIPTEN_KEEPALIVE int yon_human_is_black(void) { return g_human_is_black ? 1 : 0; }
+EMSCRIPTEN_KEEPALIVE int yon_human_is_black(void) { return g_human_is_white ? 1 : 0; }
 
 EMSCRIPTEN_KEEPALIVE int       yon_last_sq(void)     { return g_last_valid ? g_last_sq : -1; }
-EMSCRIPTEN_KEEPALIVE int       yon_last_score(void)  { return g_last_score_black; }
+EMSCRIPTEN_KEEPALIVE int       yon_last_score(void)  { return g_last_score_white; }
 EMSCRIPTEN_KEEPALIVE int       yon_last_is_mate(void){ return g_last_mate ? 1 : 0; }
 EMSCRIPTEN_KEEPALIVE int       yon_last_valid(void)  { return g_last_valid ? 1 : 0; }
 EMSCRIPTEN_KEEPALIVE double    yon_last_ms(void)     { return g_last_ms; }
 EMSCRIPTEN_KEEPALIVE double    yon_last_nodes(void)  { return (double)g_last_nodes; }
 
-// 黒視点の勝率 %(既存 verbose 出力と同じシグモイド式)
+// 白視点の勝率 %(既存 verbose 出力と同じシグモイド式)
+// 先手(白)から見た勝率 %(名前の black は先手を指す)。
 EMSCRIPTEN_KEEPALIVE double yon_win_rate_black(void)
 {
 	if (!g_last_valid) return 50.0;
-	const double s = (double)g_last_score_black;
+	const double s = (double)g_last_score_white;
 	if (s >=  MATE_SCORE) return 100.0;
 	if (s <= -MATE_SCORE) return 0.0;
 	return 100.0 / (1.0 + exp(-s / 400.0));
@@ -1083,7 +1099,7 @@ EMSCRIPTEN_KEEPALIVE unsigned long long yon_win_line(void)
 	return 0uLL;
 }
 
-// color: 1 = 黒 / 2 = 白。リーチ(次に置けば四目)のマスのうち、実際に着手可能なもの
+// color: 1 = 白 / 2 = 黒。決勝点(次に置けば四目)のマスのうち、実際に着手可能なもの
 EMSCRIPTEN_KEEPALIVE unsigned long long yon_reach(int color)
 {
 	unsigned long long b, w; abs_bits(b, w);
@@ -1091,7 +1107,7 @@ EMSCRIPTEN_KEEPALIVE unsigned long long yon_reach(int color)
 	return r & g_board.valid_move();
 }
 
-// 棋譜を書き出す。out には手数 * 2 個の int が入る。戻り値は手数
+// 棋譜を書き出す。out には手数 * 2個の int が入る。戻り値は手数
 EMSCRIPTEN_KEEPALIVE int yon_hand(int* out)
 {
 	for (size_t i = 0; i < g_hand.size(); i++)

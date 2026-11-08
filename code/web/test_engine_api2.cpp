@@ -1,3 +1,11 @@
+// =============================================================================
+//  test_engine_api2.cpp(コメント付き)
+//  解説: c109-gijutsushoten/explanation/ の解説 tex
+//
+//  engine_api2.cpp の研究モード API をネイティブでビルドして確かめるテスト。
+//
+//  ★元のコードからの変更は、先手を白・後手を黒とする色の名前の入れ替え(enum Color など)と、コメントの追加だけである。
+// =============================================================================
 // engine_api2.cpp の研究モード API の native 検証ハーネス(Web ビルドには含めない)。
 //   g++ -std=c++17 -O2 -DBENCH -DYON_NO_MAIN -DYON_DEPTH_TARGET=yon_depth_target \
 //       -DUSE_ENDGAME_R2=1 -DUSE_ENDGAME_CUT=1 \
@@ -7,12 +15,12 @@
 //   1. yon_analyze_ply が着手しない(棋譜・盤面が変わらない)
 //   2. N を深めるとノード数が増え、yon_ana_ply が一致する
 //   3. 引数チェック(奇数 / 範囲外 / top_k / 終局)
-//   4. ★評価関数の先後エントリが「解析局面の手番」に追従する(g_human_is_black に依存しない)
+//   4. ★評価関数の先後エントリが「解析局面の手番」に追従する(g_human_is_white に依存しない)
 //   5. ★上位 K が厳密(全手フルウィンドウの上位 K と完全一致)
-//   6. ★対局経路(yon_analyze = move())の評価値と 1 位の値が一致する
-//   7. 同じ条件で 2 回解析すると結果が一致する(再現性)
+//   6. ★対局経路(yon_analyze = move())の評価値と 1位の値が一致する
+//   7. 同じ条件で 2回解析すると結果が一致する(再現性)
 //   8. deadline_ms が効き、途中結果が返る
-//   9. yon_undo_one が 1 手ずつ戻す / yon_undo(2 手戻し)は不変
+//   9. yon_undo_one が 1手ずつ戻す / yon_undo(2手戻し)は不変
 
 #include <cstdio>
 #include <cstdlib>
@@ -20,7 +28,7 @@
 
 extern "C" {
 	void   yon_init(void);
-	void   yon_new_game(int human_is_black, int profile);
+	void   yon_new_game(int human_is_white, int profile);
 	void   yon_set_seed(unsigned int seed);
 	int    yon_set_schedule(const int* turns, const int* plies, int len);
 	int    yon_set_model(int model);
@@ -72,10 +80,10 @@ static const int OPENING[] = {
 };
 static const int OPENING_N = (int)(sizeof(OPENING) / sizeof(OPENING[0]));
 
-// human_is_black を指定してから OPENING の先頭 moves 手を並べる
-static void setup(int human_is_black, int moves)
+// human_is_white を指定してから OPENING の先頭 moves 手を並べる
+static void setup(int human_is_white, int moves)
 {
-	yon_new_game(human_is_black, -1);
+	yon_new_game(human_is_white, -1);
 	yon_set_seed(12345);
 	const int r = yon_load(OPENING, moves * 2);
 	if (r != moves) { printf("  !! yon_load failed: %d\n", r); exit(1); }
@@ -95,7 +103,7 @@ static void dump(const char* tag)
 	       tag, yon_ana_ply(), yon_ana_complete(), yon_ana_forced(),
 	       yon_ana_root_moves(), yon_ana_tied(), yon_ana_ms(), yon_ana_nodes());
 	for (int i = 0; i < yon_ana_count(); i++)
-		printf("      %d. %-10s score(black)=%10d  win(black)=%5.1f%%\n",
+		printf("      %d. %-10s score(white)=%10d  win(white)=%5.1f%%\n",
 		       i + 1, sq_str(yon_ana_sq(i), b), yon_ana_score(i), yon_ana_winrate(i));
 }
 
@@ -162,7 +170,7 @@ int main()
 
 	// ---- 4. ★先後エントリが手番に追従する ----
 	{
-		// 12 手進めた局面は turn=13(黒番)。human_is_black を変えても結果は同じはず。
+		// 12手進めた局面は turn=13(白番)。human_is_white を変えても結果は同じはず。
 		setup(1, 12);
 		const int turn_a = yon_turn();
 		yon_analyze_ply(10, 3, 1, 0);
@@ -173,10 +181,10 @@ int main()
 		const int sq_b = yon_ana_sq(0), sc_b = yon_ana_score(0);
 
 		char d[96];
-		snprintf(d, sizeof(d), "turn=%d  human=黒: %d/%d   human=白: %d/%d", turn_a, sq_a, sc_a, sq_b, sc_b);
-		ok("4. g_human_is_black に依存しない(黒番の局面)", sq_a == sq_b && sc_a == sc_b, d);
+		snprintf(d, sizeof(d), "turn=%d  human=白: %d/%d   human=黒: %d/%d", turn_a, sq_a, sc_a, sq_b, sc_b);
+		ok("4. g_human_is_white に依存しない(白番の局面)", sq_a == sq_b && sc_a == sc_b, d);
 
-		// 13 手進めた局面は turn=14(白番)でも同じことを確かめる
+		// 13手進めた局面は turn=14(黒番)でも同じことを確かめる
 		setup(1, 13);
 		const int turn_c = yon_turn();
 		yon_analyze_ply(10, 3, 1, 0);
@@ -184,8 +192,8 @@ int main()
 		setup(0, 13);
 		yon_analyze_ply(10, 3, 1, 0);
 		const int sq_d = yon_ana_sq(0), sc_d = yon_ana_score(0);
-		snprintf(d, sizeof(d), "turn=%d  human=黒: %d/%d   human=白: %d/%d", turn_c, sq_c, sc_c, sq_d, sc_d);
-		ok("4. g_human_is_black に依存しない(白番の局面)", sq_c == sq_d && sc_c == sc_d, d);
+		snprintf(d, sizeof(d), "turn=%d  human=白: %d/%d   human=黒: %d/%d", turn_c, sq_c, sc_c, sq_d, sc_d);
+		ok("4. g_human_is_white に依存しない(黒番の局面)", sq_c == sq_d && sc_c == sc_d, d);
 	}
 
 	// ---- 5. ★上位 K が厳密(全手フルウィンドウと一致)----
@@ -225,20 +233,20 @@ int main()
 		for (int moves = 10; moves <= 14; moves += 2)
 		{
 			const int n = 10;
-			// yon_analyze は g_human_is_black で sec を決めるので、
-			// 解析局面の手番(白番なら sec=true)に合わせて human_is_black を選ぶ。
-			// turn = moves + 1。turn が偶数(白番)なら sec=true = human_is_black=1。
+			// yon_analyze は g_human_is_white で sec を決めるので、
+			// 解析局面の手番(黒番なら sec=true)に合わせて human_is_white を選ぶ。
+			// turn = moves + 1。turn が偶数(黒番)なら sec=true = human_is_white=1。
 			const int turn = moves + 1;
-			const int human_is_black = (turn % 2 == 0) ? 1 : 0;
+			const int human_is_white = (turn % 2 == 0) ? 1 : 0;
 
-			setup(human_is_black, moves);
+			setup(human_is_white, moves);
 			const int turns[1] = { 1 }, plies[1] = { n };
 			yon_set_schedule(turns, plies, 1);
 			yon_set_seed(12345);
 			yon_analyze();
 			const int s_think = yon_last_score();
 
-			setup(human_is_black, moves);
+			setup(human_is_white, moves);
 			yon_set_schedule(turns, plies, 1);
 			yon_analyze_ply(n, 3, 1, 0);
 			const int s_ana = yon_ana_score(0);
@@ -288,7 +296,7 @@ int main()
 
 	// ---- 9. undo ----
 	{
-		setup(1, 12);   // human = 黒 → 人間手の index は偶数
+		setup(1, 12);   // human = 白 → 人間手の index は偶数
 		ok("9. undo_one が 1 手ずつ戻す", yon_undo_one() == 11 && yon_undo_one() == 10);
 		setup(1, 12);
 		ok("9. undo は 2 手戻し(従来どおり)", yon_undo() == 10);
@@ -298,12 +306,12 @@ int main()
 
 	// ---- 追加: 強制手の検出 ----
 	{
-		// 同じ列に黒を 3 つ積むと黒は縦のリーチを持つ。黒番なら即勝ち(forced=1)。
+		// 同じ列に白を 3つ積むと白は縦の決勝点を持つ。白番なら即勝ち(forced=1)。
 		yon_new_game(1, -1);
 		yon_play(0, 0); yon_play(3, 3);
 		yon_play(0, 0); yon_play(3, 3);
 		yon_play(0, 0); yon_play(3, 3);
-		// ここで turn=7(黒番)、黒は (0,0) の 4 段目で四目 → 即勝ち
+		// ここで turn=7(白番)、白は (0,0) の 4段目で四目 → 即勝ち
 		const int r = yon_analyze_ply(8, 3, 1, 0);
 		char d[96];
 		snprintf(d, sizeof(d), "ret=%d forced=%d count=%d score=%d",
@@ -315,9 +323,9 @@ int main()
 
 	// ---- B. 研究 → 対局 で先後エントリが取り残されないこと ----
 	{
-		// human = 白 → AI は黒(sec = false)。研究で白番の局面(sec = true)を解析してから対局へ戻す。
+		// human = 黒 → AI は白(sec = false)。研究で黒番の局面(sec = true)を解析してから対局へ戻す。
 		const int turns[1] = { 1 }, plies[1] = { 8 };
-		setup(0, 13);                       // turn=14 = 白番 → 解析は sec=true
+		setup(0, 13);                       // turn=14 = 黒番 → 解析は sec=true
 		yon_set_schedule(turns, plies, 1);
 		yon_analyze_ply(8, 3, 1, 0);
 		yon_analyze();                      // 対局経路。ここで sec=false に戻るはず
