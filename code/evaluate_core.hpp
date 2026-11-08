@@ -1,25 +1,36 @@
+// =============================================================================
+//  evaluate_core.hpp(コメント付き)
+//  解説: c109-gijutsushoten/explanation/ の解説 tex
+//
+//  既存の評価関数(evaluate_alpha_inc_tbl_w.hpp)に、コアの項を足した評価関数 EvalFnCore。main_core.cpp などが使う。
+//    評価値 = 既存の評価値 + Σ_k(状態 k の柱の本数)×(状態 k の重み)
+//  状態は core_feature.hpp の 6通り(下のコア / 上のコアが自分か相手か)。
+//
+//  ★元のコードからの変更は、先手を白・後手を黒とする色の名前の入れ替え(enum Color など)と、コメントの追加だけである。
+// =============================================================================
 #pragma once
 
 #include "evaluate_alpha_inc_tbl_w.hpp"   // 既存の評価関数(重み外部化版)。無変更で使う
 #include "eval_weights_core.hpp"          // EvalWeightsCore
 #include "core_feature.hpp"               // core_feat::counts
 
-// 既存評価 + 「核 2 マスの全状態」(6 本 / バケット)の評価関数。
+// 既存評価 + 「コア 2マスの全状態」(6本 / バケット)の評価関数。
 // 設計: docs/設計書/評価関数パラメータ/investigation-new-eval-features.md §2.6 D
 //
 // 評価値 = 既存の evaluate_point{fir,sec}_cont_layer_intersection_rit(base 重み)
 //        + Σ_k core_feat::counts()[k] × core[bucket*6 + k]
 //
-// 既存の評価関数には手を入れず、外側で核の項を足すだけにしてある。
+// 既存の評価関数には手を入れず、外側でコアの項を足すだけにしてある。
 // そのため core を全部 0 にしたモデル(= version 1 の重みファイル / builtin)では、
-// EvalFn(evaluate_alpha_inc_tbl_w.hpp)と 1 ノードも変わらない。
+// EvalFn(evaluate_alpha_inc_tbl_w.hpp)と 1ノードも変わらない。
 //
-// 核の項は 76 ライン走査ループの外で、葉 1 回あたり シフト 2・AND/ANDN 8・popcount 6。
+// コアの項は 76 ライン走査ループの外で、葉 1回あたり シフト 2・AND/ANDN 8・popcount 6。
 // turn >= 60 では加算しない(既存の evaluate_point*_it / continuous_*_t が
 // turn >= 60 で 0 を返し、最終盤を段パリティによる判定に任せているのに合わせる。§2.5 注意点 2)。
 // バケットは既存と同じ 先手 (turn-4)/14、後手 (turn-5)/14。
 // (turn = 60 で先手バケットは 4 になり範囲外なので、turn の判定を必ず先に行う)
 
+// コアの項 Σ_k f[k] × cw[k] を求める。cw はその手数の区間の重み 6個の先頭。
 inline int core_term(const Board &board, const int* const cw)
 {
 	int f[core_feat::NUM];

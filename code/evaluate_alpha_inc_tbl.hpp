@@ -1,21 +1,41 @@
+// =============================================================================
+//  evaluate_alpha_inc_tbl.hpp(コメント付き)
+//  解説: c109-gijutsushoten/explanation/ の解説 tex
+//
+//  評価関数 evaluate_alpha.hpp を、探索用の盤面 BoardInc(board_inc.hpp)で速く計算する版(_it / _rit)。
+//  計算の式は evaluate_alpha.hpp と同じで、重みは ver7.2(eval_weights.hpp の組み込み既定値と同じ)。main_alpha_pvs_eval_inc_tbl_id.cpp が使う。
+//
+//  速くする工夫:
+//    - BoardInc はラインごとの石数 cnt[i] を差分更新で持っているので、board.count() で数え直さなくてよい。
+//    - cnt[i] の 1バイトをそのまま添字にした表を作っておき、
+//      「石数 → 重み」と「自分(相手)の石だけが 2つのラインか」を 1回の表引きで求める。
+//    - 手数 turn と手数の区間は、入口の関数で 1回だけ計算して下の関数に渡す(evaluate_alpha_t.hpp の _t 版を使う)。
+//
+//  ★元のコードからの変更は、先手を白・後手を黒とする色の名前の入れ替え(enum Color など)と、コメントの追加だけである。
+// =============================================================================
 #pragma once
 
 #include "evaluate_alpha_t.hpp"   // continuous_{fir,sec}_t / reach_layer_intersection_t を流用
 #include "board_inc.hpp"          // BoardInc
 
 // 提案7a+7b+7c 統合: BoardInc の増分 cnt[] を添字に、7b 型の単一テーブルを引く評価関数一式(_it / _rit)。
-// 7c(evaluate_alpha_inc.hpp)を母体とし、葉の走査ループの 2 段参照
+// 7c(evaluate_alpha_inc.hpp)を母体とし、葉の走査ループの 2段参照
 //   v = cnt_to_v[cnt[i]] → stdweight[bucket*7+v+3] → v==±2 判定
 // を、cnt バイトを直接添字にした単一テーブル参照へ畳み込む(7b のテーブル畳込み)。
-// pext は増分維持により不要(BMI2 非依存)。makeT 検出・重み・tMe/tYou 集約は 7a/7b/7c と同一。
+// pext は増分維持により不要(BMI2 非依存)。準Tポイントの検出・重み・tMe/tYou 集約は 7a/7b/7c と同一。
 // continuous / reach_layer_intersection は Board(board.b)を渡して _t 版を流用する。
 // 評価値は 7a/7b/7c と完全一致する。
 
 // idx = (count_me << 4 | count_you)。cnt バイトをそのまま添字にする(pext 不要)。
+// cnt バイト(上位 4 bit = Me の石数、下位 4 bit = You の石数)を添字にする表(256要素)。
+//   stdweight_fir_tbl[区間][cnt] : そのラインの石数の重み(先手用)
+//   stdweight_sec_tbl[区間][cnt] : 同じく後手用
+//   flag_tbl[cnt]                : bit0 = Me の石だけが 2つ、bit1 = You の石だけが 2つ(準Tポイントを探すライン)
 alignas(64) inline int stdweight_fir_tbl[4][256];   // [turn_bucket][cnt] → evaluate_pointfir の stdweight 寄与
 alignas(64) inline int stdweight_sec_tbl[4][256];   // [turn_bucket][cnt] → evaluate_pointsec の weight 寄与
 alignas(64) inline unsigned char flag_tbl[256];     // bit0: v==+2(Me のみ2石), bit1: v==-2(You のみ2石)
 
+// 表を作る。main() の最初に 1回だけ呼ぶ。
 inline void init_cnt_tbl()
 {
 	// 値は evaluate_alpha_pext.hpp / evaluate_alpha_inc.hpp と同一
@@ -47,6 +67,11 @@ inline void init_cnt_tbl()
 	}
 }
 
+// -----------------------------------------------------------------------------
+// evaluate_pointfir_it: evaluate_alpha.hpp の evaluate_pointfir と同じ式で計算する(先手(白)の AI 用)。
+//   ラインの石数の重みは表 stdweight_fir_tbl から引き、flag_tbl で「石が 2つだけのライン」を見分けて
+//   準Tポイントを探す(探し方は evaluate_alpha.hpp と同じ)。
+// -----------------------------------------------------------------------------
 inline int evaluate_pointfir_it(const BoardInc &board, unsigned long long rMe, unsigned long long rYou, const int turn, const int turn_bucket)
 {
 	if(turn >= 60){
@@ -81,13 +106,13 @@ inline int evaluate_pointfir_it(const BoardInc &board, unsigned long long rMe, u
 		const unsigned b = board.cnt[i];                 // 増分維持済み(pext も count() も不要)
 		sum += stdweight_fir_tbl[turn_bucket][b];        // 単一参照(cnt_to_v と bucket*7+v+3 を融合)
 		if(flag_tbl[b] & 1)
-		{//v == +2: makeT 検出 Me 側(中身は 7a/7b/7c と同一。two は分岐内で計算)
+		{//v == +2: 準Tポイントの検出 Me 側(中身は 7a/7b/7c と同一。two は分岐内で計算)
 			unsigned long long two = ~board.b.Me & LINES[i];//LINE内の玉が入っていない部分
-			unsigned long long floatthree = two & mask_3 & ~((rYou | board.b.Me | board.b.You) << SIZE * SIZE);//twoのうち、浮き3段目決勝点の候補
+			unsigned long long floatthree = two & mask_3 & ~((rYou | board.b.Me | board.b.You) << SIZE * SIZE);//twoのうち、Tポイントの候補
 			while(floatthree)
 			{
 				unsigned long long h = floatthree & -floatthree;
-				unsigned long long make = two & ~h;//makeT点
+				unsigned long long make = two & ~h;//準Tポイント
                 tMe |= make;
 				sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket * 8 + 0];
 				sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket * 8 + 1];
@@ -97,7 +122,7 @@ inline int evaluate_pointfir_it(const BoardInc &board, unsigned long long rMe, u
 			}
 		}
 		else if(flag_tbl[b] & 2)
-		{//v == -2: makeT 検出 You 側
+		{//v == -2: 準Tポイントの検出 You 側
 			unsigned long long two = ~board.b.You & LINES[i];
 			unsigned long long floatthree = two & mask_3 & ~((rMe | board.b.Me | board.b.You) << SIZE * SIZE);
 			while(floatthree)
@@ -123,6 +148,7 @@ inline int evaluate_pointfir_it(const BoardInc &board, unsigned long long rMe, u
     return sum;
 }
 
+// evaluate_pointsec_it: 後手(黒)の AI 用。重みが違うだけで、処理は evaluate_pointfir_it と同じ。
 inline int evaluate_pointsec_it(const BoardInc &board, unsigned long long rMe, unsigned long long rYou, const int turn, const int turn_bucket)
 {
 	if(turn >= 60){
@@ -157,11 +183,11 @@ inline int evaluate_pointsec_it(const BoardInc &board, unsigned long long rMe, u
 		if(flag_tbl[b] & 1)
 		{//v == +2
 			unsigned long long two = ~board.b.Me & LINES[i];//LINE内の玉が入っていない部分
-			unsigned long long floatthree = two & mask_3 & ~((rYou | board.b.Me | board.b.You) << SIZE * SIZE);//twoのうち、浮き3段目決勝点の候補
+			unsigned long long floatthree = two & mask_3 & ~((rYou | board.b.Me | board.b.You) << SIZE * SIZE);//twoのうち、Tポイントの候補
 			while(floatthree)
 			{
 				unsigned long long h = floatthree & -floatthree;
-				unsigned long long make = two & ~h;//makeT点
+				unsigned long long make = two & ~h;//準Tポイント
                 tMe |= make;
 				sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_1) * maketweight[turn_bucket * 8 + 0];
 				sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_2) * maketweight[turn_bucket * 8 + 1];
@@ -199,6 +225,14 @@ inline int evaluate_pointsec_it(const BoardInc &board, unsigned long long rMe, u
 
 // エントリ(_rit)。7c の _ri と同一構造で、evaluate_point の呼び出しだけ _it 版に差し替える。
 // signature int(*)(const BoardInc&, ull, ull, ull) は _ri と同一 → ai_player_pvs_inc.hpp を無変更で流用できる。
+// -----------------------------------------------------------------------------
+// 評価関数の入口(_rit)。探索(ai_player_pvs_inc_id.hpp)が葉の局面で呼ぶ。手番側(Me)から見た評価値を返す。
+//   rMe_raw / rYou_raw: Board::reach() の結果(呼び出し側で計算済みのものを受け取る)。ここで相手の石があるマスを除く。
+//   hand: 合法手の集合。
+//   手数 turn、区間 bucket_fir = (turn - 4) / 14 と bucket_sec = (turn - 5) / 14、手番の色 now をここで 1回だけ求める。
+//   now は「石の数(turn - 1)が奇数なら黒番、偶数なら白番」で求める。
+// _fir が先手(白)の AI 用、_sec が後手(黒)の AI 用。
+// -----------------------------------------------------------------------------
 inline int evaluate_pointfir_cont_layer_intersection_rit(
 	const BoardInc &board, unsigned long long rMe_raw, unsigned long long rYou_raw, unsigned long long hand)
 {
@@ -206,7 +240,7 @@ inline int evaluate_pointfir_cont_layer_intersection_rit(
 	const int turn = board.b.turn();
 	const int bucket_fir = (turn - 4) / 14;
 	const int bucket_sec = (turn - 5) / 14;
-	const enum Color now = (turn - 1) & 1 ? Color::White : Color::Black;
+	const enum Color now = (turn - 1) & 1 ? Color::Black : Color::White;
 	assert(now == board.b.player());
 	const unsigned long long rMe  = rMe_raw  & ~board.b.You;
 	const unsigned long long rYou = rYou_raw & ~board.b.Me;
@@ -223,7 +257,7 @@ inline int evaluate_pointsec_cont_layer_intersection_rit(
 	const int turn = board.b.turn();
 	const int bucket_fir = (turn - 4) / 14;
 	const int bucket_sec = (turn - 5) / 14;
-	const enum Color now = (turn - 1) & 1 ? Color::White : Color::Black;
+	const enum Color now = (turn - 1) & 1 ? Color::Black : Color::White;
 	assert(now == board.b.player());
 	const unsigned long long rMe  = rMe_raw  & ~board.b.You;
 	const unsigned long long rYou = rYou_raw & ~board.b.Me;

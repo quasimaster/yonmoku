@@ -1,3 +1,14 @@
+// =============================================================================
+//  evaluate_alpha_inc_tbl_w.hpp(コメント付き)
+//  解説: c109-gijutsushoten/explanation/ の解説 tex
+//
+//  evaluate_alpha_inc_tbl.hpp の重みを外部ファイルから読めるようにした版(_w)。
+//  重みは EvalWeights(eval_weights.hpp)で受け取る。表 stdweight_fir_tbl / stdweight_sec_tbl も EvalWeights 側が持つ。
+//  組み込みの既定値 EvalWeights::builtin() を渡せば、evaluate_alpha_inc_tbl.hpp と同じ評価値を返す。
+//  最後の EvalFn は、AI に評価関数として渡すための関数オブジェクトである。
+//
+//  ★元のコードからの変更は、先手を白・後手を黒とする色の名前の入れ替え(enum Color など)と、コメントの追加だけである。
+// =============================================================================
 #pragma once
 
 #include "evaluate_alpha_t_w.hpp"   // continuous_{fir,sec}_t / reach_layer_intersection_t の _w 版
@@ -7,7 +18,7 @@
 // evaluate_alpha_inc_tbl.hpp の「重み外部ファイル化」版(_w)。
 // 設計: docs/設計書/評価関数バージョン管理/implementation-plan-eval-weights-file.md §2.2 / §2.3
 //
-// 流用元 evaluate_alpha_inc_tbl.hpp との差分は次の 3 点だけで、
+// 流用元 evaluate_alpha_inc_tbl.hpp との差分は次の 3点だけで、
 // 76 ライン走査ループの構造・分岐・添字計算・演算順序は 1 箇所も変えていない。
 //   1. static const な重み配列を削除し、末尾引数で渡された EvalWeights を参照する
 //        stdweight_fir_tbl[bucket][b]     → W.stdweight_fir_tbl[bucket][b]
@@ -20,11 +31,14 @@
 // 返す評価値は evaluate_alpha_inc_tbl.hpp と完全に一致する。
 
 // 流用元 init_cnt_tbl() の置き換え。重みに依存する表はモデル側 (build_tables) が持つ。
+// 重みに依存しない表 flag_tbl を作る。main() の最初に 1回だけ呼ぶ。
 inline void init_eval_tbl()
 {
 	init_flag_tbl();
 }
 
+// evaluate_pointfir_it: 準Tポイントとラインの石数の項(先手(白)の AI 用)。
+// sw / mw / cw は、その手数の区間の重みの先頭を指すポインタ(ループの外で 1回だけ求める)。
 inline int evaluate_pointfir_it(const BoardInc &board, unsigned long long rMe, unsigned long long rYou,
                                 const int turn, const int turn_bucket, const EvalWeights &W)
 {
@@ -51,13 +65,13 @@ inline int evaluate_pointfir_it(const BoardInc &board, unsigned long long rMe, u
 		const unsigned b = board.cnt[i];                 // 増分維持済み(pext も count() も不要)
 		sum += sw[b];                                    // 単一参照(cnt_to_v と bucket*7+v+3 を融合)
 		if(flag_tbl[b] & 1)
-		{//v == +2: makeT 検出 Me 側(中身は 7a/7b/7c と同一。two は分岐内で計算)
+		{//v == +2: 準Tポイントの検出 Me 側(中身は 7a/7b/7c と同一。two は分岐内で計算)
 			unsigned long long two = ~board.b.Me & LINES[i];//LINE内の玉が入っていない部分
-			unsigned long long floatthree = two & mask_3 & ~((rYou | board.b.Me | board.b.You) << SIZE * SIZE);//twoのうち、浮き3段目決勝点の候補
+			unsigned long long floatthree = two & mask_3 & ~((rYou | board.b.Me | board.b.You) << SIZE * SIZE);//twoのうち、Tポイントの候補
 			while(floatthree)
 			{
 				unsigned long long h = floatthree & -floatthree;
-				unsigned long long make = two & ~h;//makeT点
+				unsigned long long make = two & ~h;//準Tポイント
                 tMe |= make;
 				sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_1) * mw[0];
 				sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_2) * mw[1];
@@ -67,7 +81,7 @@ inline int evaluate_pointfir_it(const BoardInc &board, unsigned long long rMe, u
 			}
 		}
 		else if(flag_tbl[b] & 2)
-		{//v == -2: makeT 検出 You 側
+		{//v == -2: 準Tポイントの検出 You 側
 			unsigned long long two = ~board.b.You & LINES[i];
 			unsigned long long floatthree = two & mask_3 & ~((rMe | board.b.Me | board.b.You) << SIZE * SIZE);
 			while(floatthree)
@@ -93,6 +107,7 @@ inline int evaluate_pointfir_it(const BoardInc &board, unsigned long long rMe, u
     return sum;
 }
 
+// evaluate_pointsec_it: 後手(黒)の AI 用。重みが違うだけで、処理は evaluate_pointfir_it と同じ。
 inline int evaluate_pointsec_it(const BoardInc &board, unsigned long long rMe, unsigned long long rYou,
                                 const int turn, const int turn_bucket, const EvalWeights &W)
 {
@@ -118,11 +133,11 @@ inline int evaluate_pointsec_it(const BoardInc &board, unsigned long long rMe, u
 		if(flag_tbl[b] & 1)
 		{//v == +2
 			unsigned long long two = ~board.b.Me & LINES[i];//LINE内の玉が入っていない部分
-			unsigned long long floatthree = two & mask_3 & ~((rYou | board.b.Me | board.b.You) << SIZE * SIZE);//twoのうち、浮き3段目決勝点の候補
+			unsigned long long floatthree = two & mask_3 & ~((rYou | board.b.Me | board.b.You) << SIZE * SIZE);//twoのうち、Tポイントの候補
 			while(floatthree)
 			{
 				unsigned long long h = floatthree & -floatthree;
-				unsigned long long make = two & ~h;//makeT点
+				unsigned long long make = two & ~h;//準Tポイント
                 tMe |= make;
 				sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_1) * mw[0];
 				sum += __builtin_popcountll(make & ~(rYou >> SIZE*SIZE) & mask_2) * mw[1];
@@ -159,6 +174,10 @@ inline int evaluate_pointsec_it(const BoardInc &board, unsigned long long rMe, u
 }
 
 // エントリ(_rit)。流用元と同一構造で、末尾に EvalWeights を足しただけ。
+// -----------------------------------------------------------------------------
+// 評価関数の入口(_rit)。手番側(Me)から見た評価値を返す。_fir が先手(白)の AI 用、_sec が後手(黒)の AI 用。
+//   rMe_raw / rYou_raw: Board::reach() の結果。ここで相手の石があるマスを除く。hand: 合法手の集合。W: 重み。
+// -----------------------------------------------------------------------------
 inline int evaluate_pointfir_cont_layer_intersection_rit(
 	const BoardInc &board, unsigned long long rMe_raw, unsigned long long rYou_raw, unsigned long long hand,
 	const EvalWeights &W)
@@ -167,7 +186,7 @@ inline int evaluate_pointfir_cont_layer_intersection_rit(
 	const int turn = board.b.turn();
 	const int bucket_fir = (turn - 4) / 14;
 	const int bucket_sec = (turn - 5) / 14;
-	const enum Color now = (turn - 1) & 1 ? Color::White : Color::Black;
+	const enum Color now = (turn - 1) & 1 ? Color::Black : Color::White;
 	assert(now == board.b.player());
 	const unsigned long long rMe  = rMe_raw  & ~board.b.You;
 	const unsigned long long rYou = rYou_raw & ~board.b.Me;
@@ -185,7 +204,7 @@ inline int evaluate_pointsec_cont_layer_intersection_rit(
 	const int turn = board.b.turn();
 	const int bucket_fir = (turn - 4) / 14;
 	const int bucket_sec = (turn - 5) / 14;
-	const enum Color now = (turn - 1) & 1 ? Color::White : Color::Black;
+	const enum Color now = (turn - 1) & 1 ? Color::Black : Color::White;
 	assert(now == board.b.player());
 	const unsigned long long rMe  = rMe_raw  & ~board.b.You;
 	const unsigned long long rYou = rYou_raw & ~board.b.Me;
@@ -199,6 +218,11 @@ inline int evaluate_pointsec_cont_layer_intersection_rit(
 // AIPlayerPVSIncID<F> は F をメンバに持ち evaluate_func(board, rMe, rYou, hand) と呼ぶだけなので、
 // これをテンプレート引数に渡せば ai_player_pvs_inc_id.hpp を無変更のまま
 // プレイヤーごとに別モデルを使わせられる。
+// EvalFn: 評価関数の関数オブジェクト。
+//   w   : 使う重み
+//   sec : false なら先手(白)用、true なら後手(黒)用の入口を呼ぶ
+// AI(AIPlayerPVSIncID<F>)はこれをメンバに持ち、evaluate_func(board, rMe, rYou, hand) と呼ぶ。
+// こうすると、プレイヤーごとに別の重み(別のモデル)を使わせられる。
 struct EvalFn
 {
 	const EvalWeights* w;
