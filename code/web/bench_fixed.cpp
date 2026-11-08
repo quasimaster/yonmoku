@@ -1,3 +1,11 @@
+// =============================================================================
+//  bench_fixed.cpp(コメント付き)
+//  解説: c109-gijutsushoten/explanation/ の解説 tex
+//
+//  ネイティブ版と WASM 版で、同じ局面・同じ探索の速さを比べるためのベンチマーク。
+//
+//  ★元のコードからの変更は、先手を白・後手を黒とする色の名前の入れ替え(enum Color など)と、コメントの追加だけである。
+// =============================================================================
 // native / WASM を「同一局面・同一探索」で比較するためのベンチ(Web ビルドには含めない)。
 // 同じ手順を yon_load で再現し、yon_analyze で探索させる。
 // **ノード数が native と WASM で完全一致すれば、同じ仕事量を測れている**ことの証明になる。
@@ -10,7 +18,7 @@
 
 extern "C" {
 	void   yon_init(void);
-	void   yon_new_game(int human_is_black, int profile);
+	void   yon_new_game(int human_is_white, int profile);
 	int    yon_load(const int* xy, int len);
 	int    yon_analyze(void);
 	double yon_last_ms(void);
@@ -19,7 +27,7 @@ extern "C" {
 	int    yon_turn(void);
 }
 
-// bench_endgame_selfplay の game 3 の実戦譜(x, y を 1 文字ずつ並べたもの)
+// bench_endgame_selfplay の game 3 の実戦譜(x, y を 1文字ずつ並べたもの)
 static const char* GAME =
 	"000000003322222230033231030320101010031113111131102101210121210113221313113223233333012333323223313130202020121212120202";
 
