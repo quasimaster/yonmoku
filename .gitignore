@@ -1,0 +1,13 @@
+# ビルド成果物
+*.exe
+*.o
+*.obj
+
+# ローカルの検証用ディレクトリ(WASM ベンチ / E2E テストの一時成果物)
+build/
+node_modules/
+.wrangler/
+
+# 機械学習の巨大な中間ファイル(GitHub の 100MB 制限超え)
+MachineLearning/tools/out/*.npz
+MachineLearning/tools/out/*.bin
